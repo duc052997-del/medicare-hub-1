@@ -2,22 +2,43 @@
 // Middleware check token JWT trước khi cho vào các route cần đăng nhập.
 
 const jwt = require('jsonwebtoken');
+const { env } = require('../config/env.config');
+const { fail } = require('../utils/response');
+const tokenBlacklist = require('../utils/tokenBlacklist');
 
 const verifyToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // format: "Bearer <token>"
+  const authHeader = req.headers['authorization'] || '';
+  const [scheme, token] = authHeader.split(' '); // format: "Bearer <token>"
 
-  if (!token) {
-    return res.status(401).json({ message: 'Không tìm thấy token, vui lòng đăng nhập' });
+  if (!token || scheme !== 'Bearer') {
+    return fail(res, 401, 'Không tìm thấy token, vui lòng đăng nhập');
+  }
+
+  if (tokenBlacklist.isBlacklisted(token)) {
+    return fail(res, 401, 'Phiên đăng nhập đã kết thúc, vui lòng đăng nhập lại', {
+      code: 'TOKEN_REVOKED'
+    });
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
+    req.user = jwt.verify(token, env.JWT_SECRET);
+    req.token = token;
+    return next();
   } catch (error) {
-    return res.status(403).json({ message: 'Token không hợp lệ hoặc đã hết hạn' });
+    if (error.name === 'TokenExpiredError') {
+      return fail(res, 401, 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại', {
+        code: 'TOKEN_EXPIRED'
+      });
+    }
+    return fail(res, 401, 'Token không hợp lệ', { code: 'TOKEN_INVALID' });
   }
 };
 
-module.exports = { verifyToken };
+const requireRole = (...roles) => (req, res, next) => {
+  if (!req.user || !roles.includes(req.user.role)) {
+    return fail(res, 403, 'Bạn không có quyền truy cập chức năng này');
+  }
+  return next();
+};
+
+module.exports = { verifyToken, requireRole };

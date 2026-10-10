@@ -1,16 +1,15 @@
 // config/supabase.config.js
-// File này chứa cấu hình kết nối tới Supabase (hoặc DB khác nếu nhóm đổi ý sau này).
-// Nhớ: copy .env.example -> .env rồi điền SUPABASE_URL, SUPABASE_KEY thật vào.
+// Kết nối tới Supabase. Backend dùng SERVICE ROLE KEY nên bỏ qua RLS -> bắt
+// buộc phải bật RLS cho bảng users để client không đọc trực tiếp được bảng này.
 
 const { createClient } = require('@supabase/supabase-js');
+const { env } = require('./env.config');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
-
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.warn('[config] Thiếu SUPABASE_URL hoặc SUPABASE_KEY trong file .env');
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false
+  }
+});
 
 module.exports = supabase;

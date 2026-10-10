@@ -1,0 +1,26 @@
+/* styles/global.css - import 1 lần trong main.tsx */
+html { scroll-behavior: smooth; }
+.mh-nav-link:hover { color:#2563eb !important; }
+.mh-btn { transition:transform .15s,box-shadow .2s,background-color .2s; }
+.mh-btn:hover { transform:translateY(-1px);box-shadow:0 6px 16px rgba(37,99,235,.25); }
+.mh-card { transition:transform .2s,box-shadow .2s; }
+.mh-card:hover { transform:translateY(-4px);box-shadow:0 12px 28px rgba(15,23,42,.10); }
+.mh-track { scrollbar-width:none; }
+.mh-track::-webkit-scrollbar { display:none; }
+.mh-doctor { flex:0 0 calc((100% - 40px) / 3); }
+.mh-arrow:hover { background:#2563eb !important;color:#fff !important; }
+.mh-row:hover { background:#eaf3ff; }
+@media(max-width:900px) {
+  .mh-doctor { flex:0 0 calc((100% - 20px) / 2); }
+  .mh-hero { flex-direction:column !important;padding:40px 20px !important; }
+  .mh-grid4 { grid-template-columns:repeat(2,1fr) !important; }
+  .mh-grid3 { grid-template-columns:1fr !important; }
+  .mh-nav { display:none !important; }
+  .mh-header { padding:14px 20px !important; }
+  .mh-section { padding:40px 20px !important; }
+}
+@media(max-width:600px) {
+  .mh-doctor { flex:0 0 100%; }
+  .mh-grid4 { grid-template-columns:1fr !important; }
+  .mh-hotline { display:none !important; }
+}
