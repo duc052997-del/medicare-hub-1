@@ -23,21 +23,28 @@ const DUMMY_HASH = bcrypt.hashSync('medicare-hub-dummy-password', SALT_ROUNDS);
 const publicUser = (user) => ({
   id: user.id,
   email: user.email,
+  username: user.username ?? null,
   role: user.role
 });
 
 // UC001 - Đăng ký
 const register = async (req, res) => {
   try {
-    const { email, password, confirmPassword } = req.body || {};
+    const { email, password, confirmPassword, username } = req.body || {};
 
     // Bước 4 (4a): kiểm tra các trường bắt buộc
     if (
       typeof email !== 'string' || !email.trim() ||
       typeof password !== 'string' || !password ||
-      typeof confirmPassword !== 'string' || !confirmPassword
+      typeof confirmPassword !== 'string' || !confirmPassword ||
+      typeof username !== 'string' || !username.trim()
     ) {
       return fail(res, 400, 'Vui lòng nhập đầy đủ thông tin bắt buộc');
+    }
+
+    const trimmedUsername = username.trim();
+    if (trimmedUsername.length > 50) {
+      return fail(res, 400, 'Tên tài khoản tối đa 50 ký tự');
     }
 
     // Bước 5 (5a): email hợp lệ
@@ -74,8 +81,8 @@ const register = async (req, res) => {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const { data: newUser, error: insertError } = await supabase
       .from('users')
-      .insert({ email: normalizedEmail, password_hash: passwordHash })
-      .select('id, email, role, created_at')
+      .insert({ email: normalizedEmail, password_hash: passwordHash, username: trimmedUsername })
+      .select('id, email, username, role, created_at')
       .single();
 
     if (insertError) {
@@ -114,7 +121,7 @@ const login = async (req, res) => {
     // Bước 5: kiểm tra email có tồn tại trong hệ thống hay không
     const { data: user, error: findError } = await supabase
       .from('users')
-      .select('id, email, password_hash, role, is_active')
+      .select('id, email, username, password_hash, role, is_active')
       .eq('email', normalizedEmail)
       .maybeSingle();
     if (findError) throw findError;
@@ -161,7 +168,7 @@ const getMe = async (req, res) => {
   try {
     const { data: user, error } = await supabase
       .from('users')
-      .select('id, email, role, is_active')
+      .select('id, email, username, role, is_active')
       .eq('id', req.user.id)
       .maybeSingle();
     if (error) throw error;
