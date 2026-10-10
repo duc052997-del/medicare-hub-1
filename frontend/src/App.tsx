@@ -1,18 +1,14 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Home from './pages/home';
-import DoctorsPage from './pages/doctors';
-import SchedulePage from './pages/schedule';
-import ContactPage from './pages/contact';
+import DoctorsPage from './pages/doctors'; // Import trang Bác sĩ mới
+import type { AuthUser } from './pages/home';
 import Login from './pages/login';
 import Register from './pages/register';
 import Logout from './pages/logout';
-import MockBadge from './components/mockbadge';
-import { authService } from './services/authservice';
-import { AUTH_EXPIRED_EVENT, clearSession, getToken } from './services/session';
-import type { AuthUser, NavHandlers } from './types';
+import api from './services/api';
 
 const getStoredUser = (): AuthUser | null => {
-  if (!getToken()) return null;
+  if (!localStorage.getItem('token')) return null;
   try {
     const raw = localStorage.getItem('userInfo');
     return raw ? (JSON.parse(raw) as AuthUser) : null;
@@ -21,11 +17,11 @@ const getStoredUser = (): AuthUser | null => {
   }
 };
 
-// Mở tab/phiên mới thì bắt đăng nhập lại
 const getInitialUser = (): AuthUser | null => {
   if (!sessionStorage.getItem('appStarted')) {
     sessionStorage.setItem('appStarted', '1');
-    clearSession();
+    localStorage.removeItem('token');
+    localStorage.removeItem('userInfo');
     return null;
   }
   return getStoredUser();
@@ -34,30 +30,35 @@ const getInitialUser = (): AuthUser | null => {
 export default function App() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [user, setUser] = useState<AuthUser | null>(getInitialUser);
-  // Hộp xác nhận đăng xuất đè lên trang đang đứng, không chuyển sang /logout
+  // [SỬA] Khung xác nhận đăng xuất là hộp thoại bật/tắt đè lên trang đang đứng, không chuyển sang /logout nữa
   const [showLogout, setShowLogout] = useState(false);
 
   useEffect(() => {
-    const onPop = () => setCurrentPath(window.location.pathname);
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
+    const handlePopState = () => setCurrentPath(window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Kiểm tra phiên khi mở app. 401 đã được service xóa token; lỗi mạng thì giữ phiên cũ.
   useEffect(() => {
-    if (!getToken()) return;
+    if (!localStorage.getItem('token')) return;
+
     let cancelled = false;
-    authService.getMe().then((me) => !cancelled && setUser(me)).catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
-  // Bất kỳ API nào trả 401 trong lúc đang đăng nhập -> về trạng thái chưa đăng nhập
-  useEffect(() => {
-    const onExpired = () => setUser(null);
-    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
-    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    api.get('/auth/me')
+      .then((res) => {
+        if (cancelled || !res.data?.user) return;
+        localStorage.setItem('userInfo', JSON.stringify(res.data.user));
+        setUser(res.data.user);
+      })
+      .catch((err) => {
+        if (!cancelled && err?.response?.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('userInfo');
+          setUser(null);
+        }
+      });
+
+    return () => { cancelled = true; };
   }, []);
 
   const navigateTo = (path: string) => {
@@ -65,54 +66,74 @@ export default function App() {
     setCurrentPath(path);
   };
 
-  // Chuyển trang thì cuộn về đầu trang
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [currentPath]);
-
-  useEffect(() => {
-    // Đã đăng nhập thì không vào login/register; /logout không còn là trang riêng
-    if ((user && (currentPath === '/login' || currentPath === '/register')) || currentPath === '/logout') {
+    if (user && (currentPath === '/login' || currentPath === '/register'))
       navigateTo('/');
-    }
+    // [SỬA] /logout không còn là trang riêng: ai vào thẳng đường dẫn này thì đưa về trang chủ
+    if (currentPath === '/logout')
+      navigateTo('/');
   }, [user, currentPath]);
 
-  // doctorId có thể có (bấm "Đặt lịch" ở thẻ bác sĩ) hoặc không. UC006 sẽ dùng để chọn sẵn bác sĩ.
-  const handleBooking = (doctorId?: string | number) => {
-    if (!user) return navigateTo('/login');
-    alert(`Chức năng đặt lịch khám đang được phát triển.${doctorId ? `\n(Bác sĩ đã chọn: ${doctorId})` : ''}`);
+  const handleLoginSuccess = () => {
+    setUser(getStoredUser());
+    navigateTo('/');
   };
 
-  // Tạo 1 lần, truyền cho mọi trang có Header
-  const nav: NavHandlers = {
-    onHome: () => navigateTo('/'),
-    onDoctors: () => navigateTo('/doctors'),
-    onSchedule: () => navigateTo('/schedule'),
-    onContact: () => navigateTo('/contact'),
-    onLogin: () => navigateTo('/login'),
-    onRegister: () => navigateTo('/register'),
-    onLogout: () => setShowLogout(true),
+  const handleBooking = () => {
+    if (!user) {
+      navigateTo('/login');
+      return;
+    }
+    alert('Chức năng đặt lịch khám đang được phát triển.');
+  };
+
+  const openLogout = () => setShowLogout(true); // [SỬA] bấm "Đăng xuất" -> hiện khung đè lên trang hiện tại
+
+  const handleDeveloping = (name: string) => {
+    alert(`Chức năng ${name} đang được phát triển.`);
   };
 
   return (
     <div>
-      {(currentPath === '/' || currentPath === '/home') && <Home user={user} nav={nav} onBooking={handleBooking} />}
-      {currentPath === '/doctors' && <DoctorsPage user={user} nav={nav} onBooking={handleBooking} />}
-      {currentPath === '/schedule' && <SchedulePage user={user} nav={nav} onBooking={handleBooking} />}
-      {currentPath === '/contact' && <ContactPage user={user} nav={nav} />}
+      {(currentPath === '/' || currentPath === '/home') && (
+        <Home
+          user={user}
+          onNavigateToBooking={handleBooking}
+          onNavigateToLogin={() => navigateTo('/login')}
+          onNavigateToRegister={() => navigateTo('/register')}
+          onNavigateToLogout={openLogout}
+          onNavigateToDoctors={() => navigateTo('/doctors')}
+          onNavigateToSchedule={() => handleDeveloping('lịch khám')}
+          onNavigateToContact={() => handleDeveloping('liên hệ')}
+        />
+      )}
+
+      {currentPath === '/doctors' && (
+        <DoctorsPage
+          user={user}
+          onNavigateHome={() => navigateTo('/')}
+          onNavigateToDoctors={() => navigateTo('/doctors')}
+          onNavigateToSchedule={() => handleDeveloping('lịch khám')}
+          onNavigateToContact={() => handleDeveloping('liên hệ')}
+          onNavigateToLogin={() => navigateTo('/login')}
+          onNavigateToRegister={() => navigateTo('/register')}
+          onNavigateToLogout={openLogout}
+          onNavigateToBooking={handleBooking}
+        />
+      )}
 
       {currentPath === '/login' && !user && (
         <Login
-          onSwitchToRegister={nav.onRegister}
-          onLoginSuccess={() => {
-            setUser(getStoredUser());
-            navigateTo('/');
-          }}
+          onSwitchToRegister={() => navigateTo('/register')}
+          onLoginSuccess={handleLoginSuccess}
         />
       )}
-      {currentPath === '/register' && !user && <Register onSwitchToLogin={nav.onLogin} />}
 
-      {/* Luôn nằm cuối, hiện đè lên bất kỳ trang nào đang mở */}
+      {currentPath === '/register' && !user && (
+        <Register onSwitchToLogin={() => navigateTo('/login')} />
+      )}
+
+      {/* [SỬA] Luôn nằm cuối, hiện đè lên bất kỳ trang nào đang mở (Logout tự trả về null khi isOpen = false) */}
       <Logout
         isOpen={showLogout && !!user}
         onClose={() => setShowLogout(false)}
@@ -122,8 +143,6 @@ export default function App() {
           navigateTo('/');
         }}
       />
-
-      <MockBadge />
     </div>
   );
 }

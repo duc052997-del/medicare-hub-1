@@ -1,39 +1,41 @@
-// services/clinicservice.ts
-// Gộp clinicapi.ts + clinicservice.ts cũ: API-05 GET /api/home và hook useClinicInfo
-// cho Header, Footer, Home. Mock hoặc BE thật chọn theo env.USE_MOCK.
+// services/clinicService.ts  [FILE MỚI]
+// Lấy thông tin giới thiệu phòng khám từ backend: GET /api/home (UC004)
+// Backend trả về: { success, message, clinic: { id, name, description, hotline, address, email } }
+// Không có dữ liệu -> backend trả 404 -> FE coi là "chưa có thông tin" (null), KHÔNG phải lỗi.
 
 import { useEffect, useState } from 'react';
-import { env } from '../config/env';
-import { ApiError } from './apierror';
 import api from './api';
-import type { ClinicInfo } from '../types';
 
-export type { ClinicInfo };
+export interface ClinicInfo {
+  id: string | number;
+  name: string | null;
+  description: string | null;
+  hotline: string | null;
+  address: string | null;
+  email: string | null;
+  working_hours?: string | null; 
+  workingHours?: string | null;
+}
 
-// 404 = "chưa có dữ liệu" (hợp lệ) -> trả null, không phải lỗi
-const getClinic = async (): Promise<ClinicInfo | null> => {
-  try {
-    if (env.USE_MOCK) return await (await import('./mocks/mockclinic')).mockGetClinic();
-    const res = await api.get('/home');
-    return (res.data?.clinic as ClinicInfo) ?? null;
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) return null;
-    throw err;
-  }
-};
-
-// Cache 1 lần gọi: Header, Footer, Home cùng dùng hook mà chỉ gọi đúng 1 lần.
+// Cache 1 lần gọi: Header, Footer, Home cùng dùng hook mà chỉ gọi API đúng 1 lần.
 let cached: Promise<ClinicInfo | null> | null = null;
 
 export const fetchClinicInfo = (): Promise<ClinicInfo | null> => {
-  // Lỗi mạng/500 -> xóa cache để lần mount sau gọi lại
-  cached ??= getClinic().catch(() => {
-    cached = null;
-    return null;
-  });
+  if (!cached) {
+    cached = api
+      .get('/home')
+      .then((res) => (res.data?.clinic as ClinicInfo) ?? null)
+      .catch((err) => {
+        // 404 = chưa có dữ liệu (hợp lệ) -> giữ cache null.
+        // Lỗi khác (mạng, 500) -> xoá cache để lần mount sau gọi lại.
+        if (err?.response?.status !== 404) cached = null;
+        return null;
+      });
+  }
   return cached;
 };
 
+// Hook dùng trong component: { clinic, loading }
 export function useClinicInfo() {
   const [clinic, setClinic] = useState<ClinicInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,14 +47,12 @@ export function useClinicInfo() {
       setClinic(c);
       setLoading(false);
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   return { clinic, loading };
 }
 
-// Đang tải -> "...", thiếu dữ liệu -> "đang cập nhật"
+// Giá trị hiển thị: đang tải -> "...", thiếu dữ liệu -> "đang cập nhật"
 export const displayInfo = (value: string | null | undefined, loading: boolean) =>
   value && value.trim() ? value : loading ? '...' : 'đang cập nhật';

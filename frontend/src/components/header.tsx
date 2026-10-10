@@ -1,67 +1,148 @@
+import React from 'react';
 import SafeImage from './safeimage';
-import { useClinicInfo, displayInfo } from '../services/clinicservice';
-import { getAsset, getRoleLabel } from '../utils/helpers';
-import { layoutStyles as s } from '../styles/layout';
-import type { AuthUser, NavHandlers } from '../types';
+import { useClinicInfo, displayInfo } from '../services/clinicservice'; // [SỬA] lấy thông tin phòng khám từ API
+
+interface AuthUser {
+  id: string | number;
+  email: string;
+  username: string | null;
+  role: string;
+}
 
 interface HeaderProps {
   user?: AuthUser | null;
-  nav: NavHandlers;
-  // Mục menu được tô sáng: 'home' | 'doctors' | 'schedule' | 'contact' | null (không tô)
-  active?: string | null;
+  logoImage?: string;
+  displayName: string;
+  roleLabel: string;
+  scrollTo: (id: string) => void;
+  onNavigateToDoctors?: () => void;
+  onNavigateToSchedule?: () => void;
+  onNavigateToContact?: () => void;
+  onNavigateToLogin?: () => void;
+  onNavigateToRegister?: () => void;
+  onNavigateToLogout?: () => void;
+  styles: Record<string, React.CSSProperties>;
 }
 
-export default function Header({ user, nav, active = 'home' }: HeaderProps) {
-  const { clinic, loading } = useClinicInfo(); // hotline lấy từ DB
-  const displayName = user ? user.username || user.email : '';
-
-  const links = [
-    { key: 'home', text: 'Trang chủ', onClick: nav.onHome },
-    { key: 'doctors', text: 'Bác sĩ', onClick: nav.onDoctors },
-    { key: 'schedule', text: 'Lịch khám', onClick: nav.onSchedule },
-    { key: 'contact', text: 'Liên hệ', onClick: nav.onContact },
-  ];
+export default function Header({
+  user,
+  logoImage,
+  displayName,
+  roleLabel,
+  scrollTo,
+  onNavigateToDoctors,
+  onNavigateToSchedule,
+  onNavigateToContact,
+  onNavigateToLogin,
+  onNavigateToRegister,
+  onNavigateToLogout,
+  styles,
+}: HeaderProps) {
+  // [SỬA] hotline lấy từ DB thay vì ghi cứng
+  const { clinic, loading: clinicLoading } = useClinicInfo();
 
   return (
-    <header className="mh-header" style={s.header}>
-      <div style={s.logoBox} onClick={nav.onHome}>
-        <SafeImage src={getAsset('2')} alt="Logo" style={s.logoImg} />
-        <span style={s.logoText}>MediCare-Hub</span>
+    <header className="mh-header" style={styles.header}>
+      <div
+        style={styles.logoBox}
+        onClick={() => scrollTo('top')}
+      >
+        <SafeImage
+          src={logoImage}
+          alt="Logo"
+          style={styles.logoImg}
+        />
+
+        <span style={styles.logoText}>
+          MediCare-Hub
+        </span>
       </div>
 
-      <nav className="mh-nav" style={s.nav}>
-        {links.map((l) => (
-          <span
-            key={l.key}
-            className="mh-nav-link"
-            style={{ ...s.navLink, ...(l.key === active ? s.navActive : {}) }}
-            onClick={l.onClick}
-          >
-            {l.text}
-          </span>
-        ))}
+      <nav className="mh-nav" style={styles.nav}>
+        <span
+          className="mh-nav-link"
+          style={{ ...styles.navLink, ...styles.navActive }}
+          onClick={() => scrollTo('top')}
+        >
+          Trang chủ
+        </span>
+
+        <span
+          className="mh-nav-link"
+          style={styles.navLink}
+          onClick={onNavigateToDoctors}
+        >
+          Bác sĩ
+        </span>
+
+        <span
+          className="mh-nav-link"
+          style={styles.navLink}
+          onClick={onNavigateToSchedule}
+        >
+          Lịch khám
+        </span>
+
+        <span
+          className="mh-nav-link"
+          style={styles.navLink}
+          onClick={onNavigateToContact}
+        >
+          Liên hệ
+        </span>
       </nav>
 
-      <div style={s.headerRight}>
-        <span className="mh-hotline" style={s.hotline}>
-          📞 {displayInfo(clinic?.hotline, loading)}
+      <div style={styles.headerRight}>
+        <span
+          className="mh-hotline"
+          style={styles.hotline}
+        >
+          📞 {displayInfo(clinic?.hotline, clinicLoading)} {/* [SỬA] */}
         </span>
 
         {user ? (
           <>
-            <div style={s.userBox}>
-              <div style={s.userAvatar}>{displayName.charAt(0).toUpperCase()}</div>
-              <div style={s.userInfo}>
-                <span style={s.userName}>{displayName}</span>
-                <span style={s.roleBadge}>{getRoleLabel(user.role)}</span>
+            <div style={styles.userBox}>
+              <div style={styles.userAvatar}>
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+
+              <div style={styles.userInfo}>
+                <span style={styles.userName}>
+                  {displayName}
+                </span>
+
+                <span style={styles.roleBadge}>
+                  {roleLabel}
+                </span>
               </div>
             </div>
-            <button className="mh-btn" onClick={nav.onLogout} style={s.btnOutline}>Đăng xuất</button>
+
+            <button
+              className="mh-btn"
+              onClick={onNavigateToLogout}
+              style={styles.btnOutline}
+            >
+              Đăng xuất
+            </button>
           </>
         ) : (
           <>
-            <button className="mh-btn" onClick={nav.onLogin} style={s.btnOutline}>Đăng nhập</button>
-            <button className="mh-btn" onClick={nav.onRegister} style={s.btnPrimarySm}>Đăng ký</button>
+            <button
+              className="mh-btn"
+              onClick={onNavigateToLogin}
+              style={styles.btnOutline}
+            >
+              Đăng nhập
+            </button>
+
+            <button
+              className="mh-btn"
+              onClick={onNavigateToRegister}
+              style={styles.btnPrimarySm}
+            >
+              Đăng ký
+            </button>
           </>
         )}
       </div>
