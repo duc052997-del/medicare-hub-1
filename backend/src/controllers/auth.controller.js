@@ -1,13 +1,17 @@
 
-// controllers/auth.controller.js
-// Xử lý xác thực: đăng ký (UC001), đăng nhập (UC002),
-// lấy thông tin phiên đăng nhập và đăng xuất (UC003).
+/**
+ * controllers/auth.controller.js
+ * UC001 - Đăng ký
+ * UC002 - Đăng nhập
+ * UC003 - Thông tin phiên đăng nhập và đăng xuất
+ */
 
 const bcrypt = require('bcryptjs');
 const supabase = require('../config/supabase.config');
 const { generateToken } = require('../utils/helper');
 const { success, fail, serverError } = require('../utils/response');
 const tokenBlacklist = require('../utils/tokenBlacklist');
+
 const {
   MIN_PASSWORD_LENGTH,
   MAX_PASSWORD_LENGTH,
@@ -18,7 +22,11 @@ const {
 
 const EMAIL_TAKEN_MESSAGE = 'Email không hợp lệ hoặc đã được đăng ký';
 
-// Hash mồi để hạn chế chênh lệch thời gian phản hồi khi email không tồn tại
+const DUPLICATE_DATA_MESSAGE =
+  'Thông tin đăng ký bị trùng, vui lòng kiểm tra lại';
+
+// Hash mồi để hạn chế chênh lệch thời gian phản hồi
+// khi email không tồn tại
 const DUMMY_HASH = bcrypt.hashSync(
   'medicare-hub-dummy-password',
   SALT_ROUNDS
@@ -33,9 +41,8 @@ const publicUser = (user) => ({
 
 // =====================================================
 // UC001 - ĐĂNG KÝ
-// Tạo đồng thời tài khoản users và hồ sơ patients
-// bằng PostgreSQL RPC (cùng một transaction).
 // =====================================================
+
 const register = async (req, res) => {
   try {
     const { email, password, confirmPassword, username } = req.body || {};
@@ -90,7 +97,7 @@ const register = async (req, res) => {
       return fail(res, 400, 'Mật khẩu xác nhận không khớp');
     }
 
-    // Bước 6: Kiểm tra email đã tồn tại chưa
+    // Bước 6: Kiểm tra email đã tồn tại
     const { data: existing, error: findError } = await supabase
       .from('users')
       .select('id')
@@ -111,9 +118,8 @@ const register = async (req, res) => {
       SALT_ROUNDS
     );
 
-    // Bước 8: Gọi PostgreSQL RPC.
-    // RPC tạo users + patients trong một transaction.
-    // Nếu tạo patients thất bại, users cũng rollback.
+    // Bước 8: Gọi RPC register_patient
+    // PostgreSQL đảm bảo hai INSERT cùng transaction
     const { data: newUser, error: insertError } = await supabase
       .rpc('register_patient', {
         p_email: normalizedEmail,
@@ -124,29 +130,50 @@ const register = async (req, res) => {
       .single();
 
     if (insertError) {
-      // PostgreSQL 23505: vi phạm UNIQUE.
-      // Có thể do email trùng khi đăng ký đồng thời,
-      // hoặc mã bệnh nhân được sinh bị trùng.
+      // PostgreSQL 23505: vi phạm ràng buộc UNIQUE.
+      // Không được mặc định mọi lỗi 23505 đều do email.
       if (insertError.code === '23505') {
-        // Kiểm tra lại email để tránh báo nhầm lỗi.
+
+        // Kiểm tra lại email để xử lý trường hợp
+        // hai yêu cầu đăng ký đồng thời cùng một email.
         const { data: duplicate, error: duplicateError } = await supabase
           .from('users')
           .select('id')
           .eq('email', normalizedEmail)
           .maybeSingle();
 
-        if (!duplicateError && duplicate) {
+        // Nếu kiểm tra lại database thất bại,
+        // giữ nguyên cách xử lý lỗi hệ thống.
+        if (duplicateError) {
+          throw duplicateError;
+        }
+
+        // Email đã tồn tại
+        if (duplicate) {
           return fail(res, 409, EMAIL_TAKEN_MESSAGE);
         }
+
+        // Vi phạm UNIQUE khác, ví dụ:
+        // - Username bị trùng nếu database có UNIQUE
+        // - Mã bệnh nhân được sinh bị trùng
+        // Không báo nhầm là email đã được đăng ký.
+        console.error(
+          '[auth.register] UNIQUE constraint violation:',
+          insertError
+        );
+
+        return fail(res, 409, DUPLICATE_DATA_MESSAGE);
       }
 
+      // Các lỗi database khác
       throw insertError;
     }
 
-    // Bước 9: Trả kết quả theo API-01
+    // Bước 9: Đăng ký thành công
     return success(res, 201, 'Đăng ký thành công', {
       user: newUser
     });
+
   } catch (error) {
     return serverError(res, 'auth.register', error);
   }
@@ -154,8 +181,9 @@ const register = async (req, res) => {
 
 // =====================================================
 // UC002 - ĐĂNG NHẬP
-// Giữ nguyên logic hiện tại
+// Giữ nguyên logic
 // =====================================================
+
 const login = async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -221,6 +249,7 @@ const login = async (req, res) => {
       token,
       user: publicUser(user)
     });
+
   } catch (error) {
     return serverError(res, 'auth.login', error);
   }
@@ -228,8 +257,9 @@ const login = async (req, res) => {
 
 // =====================================================
 // GET /api/auth/me
-// Giữ nguyên logic hiện tại
+// Giữ nguyên logic
 // =====================================================
+
 const getMe = async (req, res) => {
   try {
     const { data: user, error } = await supabase
@@ -258,6 +288,7 @@ const getMe = async (req, res) => {
         user: publicUser(user)
       }
     );
+
   } catch (error) {
     return serverError(res, 'auth.getMe', error);
   }
@@ -265,8 +296,9 @@ const getMe = async (req, res) => {
 
 // =====================================================
 // UC003 - ĐĂNG XUẤT
-// Giữ nguyên logic hiện tại
+// Giữ nguyên logic
 // =====================================================
+
 const logout = async (req, res) => {
   tokenBlacklist.add(req.token, req.user.exp);
 
