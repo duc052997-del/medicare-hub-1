@@ -9,7 +9,7 @@ const getClinicIntro = async (req, res) => {
   try {
     const { data: clinic, error } = await supabase
       .from('clinic_info')
-      .select('id, name, description, hotline, address, email')
+      .select('id, name, description, hotline, address, email, working_hours')
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
