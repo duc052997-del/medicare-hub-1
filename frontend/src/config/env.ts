@@ -5,7 +5,7 @@ const toBool = (value: unknown) => String(value ?? '').trim().toLowerCase() === 
 
 export const env = {
   // URL backend, đã gồm /api (khớp mục "Base URL" trong hợp đồng API)
-  API_URL: (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:5000/api',
+  API_URL: (import.meta.env.VITE_API_URL as string | undefined) || 'https://medicare-hub-qha6.onrender.com/api',
 
   // true = dùng dữ liệu giả trong services/mocks, không gọi backend
   USE_MOCK: toBool(import.meta.env.VITE_USE_MOCK),
