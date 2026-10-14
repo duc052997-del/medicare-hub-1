@@ -58,3 +58,15 @@ export const buildShifts = (slots: Slot[]): Shift[] => {
     ];
   });
 };
+
+// ---------- Ngày/giờ theo giờ Việt Nam (UTC+7), dùng cho đặt lịch ----------
+const vietnamNow = () => new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString();
+export const todayVN = () => vietnamNow().slice(0, 10); // YYYY-MM-DD
+export const timeNowVN = () => vietnamNow().slice(11, 16); // HH:mm
+
+// Đúng định dạng VÀ là ngày có thật: '2026-13-45', '2026-02-30' -> false (Lệch #7 trong hợp đồng)
+export const isRealDate = (day: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const d = new Date(`${day}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === day;
+};

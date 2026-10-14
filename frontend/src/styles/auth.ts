@@ -7,7 +7,9 @@ const input: CSSProperties = {
   width: '100%',
   padding: '10px 14px',
   fontSize: '14px',
-  border: '1px solid #d1d5db',
+  borderWidth: '1px',
+  borderStyle: 'solid',
+  borderColor: '#d1d5db', // tách 3 thuộc tính để Field đổi borderColor khi có lỗi mà React không cảnh báo
   borderRadius: '6px',
   outline: 'none',
   boxSizing: 'border-box',

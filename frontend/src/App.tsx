@@ -1,3 +1,4 @@
+// App.tsx — Router thủ công, phiên đăng nhập, khung đặt lịch đè trang, hộp đăng xuất.
 import { useState, useEffect } from 'react';
 import Home from './pages/home';
 import DoctorsPage from './pages/doctors';
@@ -6,6 +7,7 @@ import ContactPage from './pages/contact';
 import Login from './pages/login';
 import Register from './pages/register';
 import Logout from './pages/logout';
+import BookingModal from './components/bookingmodal';
 import MockBadge from './components/mockbadge';
 import { authService } from './services/authservice';
 import { AUTH_EXPIRED_EVENT, clearSession, getToken } from './services/session';
@@ -36,7 +38,9 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(getInitialUser);
   // Hộp xác nhận đăng xuất đè lên trang đang đứng, không chuyển sang /logout
   const [showLogout, setShowLogout] = useState(false);
-
+  // Khung đặt lịch đè lên trang đang mở (UC006); doctorId có khi bấm "Đặt lịch" ở thẻ bác sĩ
+  const [booking, setBooking] = useState<{ open: boolean; doctorId: string }>({ open: false, doctorId: '' });
+  
   useEffect(() => {
     const onPop = () => setCurrentPath(window.location.pathname);
     window.addEventListener('popstate', onPop);
@@ -77,11 +81,17 @@ export default function App() {
     }
   }, [user, currentPath]);
 
-  // doctorId có thể có (bấm "Đặt lịch" ở thẻ bác sĩ) hoặc không. UC006 sẽ dùng để chọn sẵn bác sĩ.
+  // Đăng xuất / phiên hết hạn thì đóng khung đặt lịch
+  useEffect(() => {
+    if (!user) setBooking({ open: false, doctorId: '' });
+  }, [user]);
+
+  // Chưa đăng nhập -> sang trang đăng nhập; đã đăng nhập -> mở khung đặt lịch (chọn sẵn bác sĩ nếu có doctorId)
   const handleBooking = (doctorId?: string | number) => {
     if (!user) return navigateTo('/login');
-    alert(`Chức năng đặt lịch khám đang được phát triển.${doctorId ? `\n(Bác sĩ đã chọn: ${doctorId})` : ''}`);
+    setBooking({ open: true, doctorId: doctorId ? String(doctorId) : '' });
   };
+  const closeBooking = () => setBooking({ open: false, doctorId: '' });
 
   // Tạo 1 lần, truyền cho mọi trang có Header
   const nav: NavHandlers = {
@@ -111,6 +121,25 @@ export default function App() {
         />
       )}
       {currentPath === '/register' && !user && <Register onSwitchToLogin={nav.onLogin} />}
+
+      
+      {booking.open && user && (
+        <BookingModal
+          user={user}
+          presetDoctorId={booking.doctorId}
+          onClose={closeBooking}
+          onBooked={() => {
+            // Logic khi đặt lịch thành công
+            closeBooking();
+            navigateTo('/schedule');
+          }}
+          onViewSchedule={() => {
+            // Logic khi bấm nút xem lịch khám
+            closeBooking();
+            navigateTo('/schedule');
+          }}
+        />
+      )}
 
       {/* Luôn nằm cuối, hiện đè lên bất kỳ trang nào đang mở */}
       <Logout
