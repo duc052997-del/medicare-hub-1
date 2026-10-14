@@ -1,4 +1,3 @@
-
 /**
  * controllers/auth.controller.js
  * UC001 - Đăng ký
@@ -305,9 +304,4 @@ const logout = async (req, res) => {
   return success(res, 200, 'Đăng xuất thành công');
 };
 
-module.exports = {
-  register,
-  login,
-  getMe,
-  logout
-};
+module.exports = { register, login, getMe, logout };
