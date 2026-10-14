@@ -8,6 +8,26 @@ const supabase = require('../config/supabase.config');
 const { success, fail, serverError } = require('../utils/response');
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Chỉ đúng định dạng YYYY-MM-DD thôi chưa đủ: "2026-13-45" cũng khớp regex
+// trên nhưng tháng 13 / ngày 45 không có thật. new Date() của JS lại tự động
+// "cuộn" ngày sai thành 1 ngày khác hợp lệ (không báo lỗi), nên phải tự kiểm
+// tra lại xem ngày/tháng/năm dựng lại từ Date có khớp với số người dùng
+// truyền vào hay không.
+const isValidCalendarDate = (dateStr) => {
+  if (!DATE_REGEX.test(dateStr)) return false;
+
+  const [year, month, day] = dateStr.split('-').map(Number);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+};
 
 // Ngày hôm nay theo giờ Việt Nam (UTC+7), dùng làm mặc định khi FE không
 // truyền ?date= - khớp với mock UI để sẵn "Ngày khám: Hôm nay".
@@ -90,7 +110,13 @@ const getDoctorSchedule = async (req, res) => {
     const { id } = req.params;
     const date = req.query.date || getTodayInVietnam();
 
-    if (!DATE_REGEX.test(date)) {
+    // id sai định dạng (không phải UUID) thì báo lỗi rõ ràng 400, không để
+    // Supabase ném lỗi database rồi rơi xuống thành lỗi hệ thống chung (500).
+    if (!UUID_REGEX.test(id)) {
+      return fail(res, 400, 'ID bác sĩ không hợp lệ');
+    }
+
+    if (!isValidCalendarDate(date)) {
       return fail(res, 400, 'Ngày không hợp lệ, định dạng đúng là YYYY-MM-DD');
     }
 
