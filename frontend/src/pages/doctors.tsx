@@ -1,3 +1,4 @@
+// pages/doctors.tsx — Trang Bác sĩ: bộ lọc + lưới thẻ bác sĩ (thẻ cột dọc, cùng chiều cao, nút sát đáy).
 import { useState, useMemo, useEffect } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import Header from '../components/header';
@@ -135,42 +136,45 @@ export default function DoctorsPage({ user, nav, onBooking }: DoctorsPageProps) 
   const renderDoctorCard = (doc: Doctor) => {
     const shifts = buildShifts(slotsByDoctor[String(doc.id)] ?? []);
     return (
-      <div key={doc.id} style={styles.doctorCard}>
-        <SafeImage
-          src={doc.avatar_url ?? undefined}
-          alt={doc.full_name}
-          style={styles.doctorImg}
-          fallback={<div style={styles.doctorAvatar}>👨‍⚕️</div>}
-        />
+      <div key={doc.id} className="mh-card" style={styles.doctorCard}>
+        <div style={styles.cardTop}>
+          <SafeImage
+            src={doc.avatar_url ?? undefined}
+            alt={doc.full_name}
+            style={styles.doctorImg}
+            fallback={<div style={styles.doctorAvatar}>👨‍⚕️</div>}
+          />
 
-        <div style={styles.doctorContent}>
-          <div style={styles.badgeRow}>
-            <span style={styles.badge}>{doc.specialty}</span>
-            {featuredIds.has(String(doc.id)) && <span style={styles.featuredBadge}>⭐ Nổi bật</span>}
+          <div style={styles.cardTitleBox}>
+            <div style={styles.badgeRow}>
+              <span style={styles.badge}>{doc.specialty}</span>
+              {featuredIds.has(String(doc.id)) && <span style={styles.featuredBadge}>⭐ Nổi bật</span>}
+            </div>
+            
+            <h3 style={styles.docName}>{doc.full_name}</h3>
           </div>
-
-          <h3 style={styles.docName}>{doc.full_name}</h3>
-          {doc.bio && <p style={styles.bio}>{doc.bio}</p>}
-
-          <div style={styles.scheduleInfo}>
-            <span style={styles.scheduleTitle}>Ca làm việc ({dateLabel}):</span>
-            {shifts.length > 0 ? (
-              <div style={styles.shiftList}>
-                {shifts.map((s) => (
-                  <div key={s.label} style={styles.shiftRow}>
-                    <span style={styles.shiftName}>{s.label}</span>
-                    <span style={styles.shiftTime}>{s.start} - {s.end}</span>
-                    <span style={styles.shiftCount}>còn {s.availableCount} khung giờ</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={styles.noShift}>Không có lịch làm việc ngày này</p>
-            )}
-          </div>
-
-          <button onClick={() => onBooking(doc.id)} style={styles.btnBook}>Đặt lịch hẹn</button>
         </div>
+
+        <p style={styles.bio}>{doc.bio || 'Chưa có mô tả.'}</p>
+
+        <div style={styles.scheduleInfo}>
+          <span style={styles.scheduleTitle}>Ca làm việc ({dateLabel}):</span>
+          {shifts.length > 0 ? (
+            <div style={styles.shiftList}>
+              {shifts.map((s) => (
+                <div key={s.label} style={styles.shiftRow}>
+                  <span style={styles.shiftName}>{s.label}</span>
+                  <span style={styles.shiftTime}>{s.start} - {s.end}</span>
+                  <span style={styles.shiftCount}>còn {s.availableCount} khung giờ</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={styles.noShift}>Không có lịch làm việc ngày này</p>
+          )}
+        </div>
+
+        <button className="mh-btn" onClick={() => onBooking(doc.id)} style={styles.btnBook}>Đặt lịch ngay</button>
       </div>
     );
   };
@@ -241,7 +245,7 @@ export default function DoctorsPage({ user, nav, onBooking }: DoctorsPageProps) 
 
 const field: CSSProperties = { padding: '10px 14px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 14, outline: 'none' };
 const tag: CSSProperties = { fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 6 };
-const circle: CSSProperties = { width: 90, height: 90, borderRadius: '50%', flexShrink: 0 };
+const circle: CSSProperties = { width: 72, height: 72, borderRadius: '50%', flexShrink: 0 };
 
 const styles: Record<string, CSSProperties> = {
 
@@ -258,23 +262,24 @@ const styles: Record<string, CSSProperties> = {
   listSection: { ...inner, padding: '40px 24px 72px' },
   resultSummary: { fontSize: 15, color: '#64748b', marginBottom: 20 },
   sectionTitle: { fontSize: 22, fontWeight: 800, color: '#0f172a', margin: '0 0 16px' },
-  doctorGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 24 },
-  doctorCard: { backgroundColor: '#fff', borderRadius: 16, padding: 24, border: '1px solid #dbeafe', display: 'flex', gap: 20, boxShadow: '0 4px 12px rgba(15,23,42,.03)', alignItems: 'flex-start' },
+  doctorGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 24, alignItems: 'stretch' },
+  doctorCard: { backgroundColor: '#fff', borderRadius: 16, padding: 22, border: '1px solid #dbeafe', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box', boxShadow: '0 4px 12px rgba(15,23,42,.03)' },
+  cardTop: { display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 },
+  cardTitleBox: { flex: 1, minWidth: 0 },
   doctorImg: { ...circle, objectFit: 'cover', border: '3px solid #dbeafe' },
-  doctorAvatar: { ...circle, backgroundColor: '#e0efff', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: 40 },
-  doctorContent: { flex: 1, display: 'flex', flexDirection: 'column' },
+  doctorAvatar: { ...circle, backgroundColor: '#e0efff', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: 32 },
   badgeRow: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 },
   badge: { ...tag, backgroundColor: '#eff6ff', color: '#2563eb' },
   featuredBadge: { ...tag, backgroundColor: '#fef3c7', color: '#b45309' },
-  docName: { fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 4px' },
-  bio: { fontSize: 13, color: '#64748b', margin: '0 0 12px', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' },
+  docName: { fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0, overflowWrap: 'anywhere' },
+  bio: { fontSize: 13, color: '#64748b', margin: '0 0 12px', lineHeight: 1.5, minHeight: 40, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' },
 
-  scheduleInfo: { borderTop: '1px solid #f1f5f9', paddingTop: 10, marginBottom: 16 },
+  scheduleInfo: { flex: 1, borderTop: '1px solid #f1f5f9', paddingTop: 10, marginBottom: 16 },
   scheduleTitle: { fontSize: 12, color: '#94a3b8', fontWeight: 600 },
   shiftList: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 },
-  shiftRow: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, fontSize: 13 },
-  shiftName: { fontWeight: 700, color: '#0f172a', minWidth: 62 },
-  shiftTime: { padding: '2px 10px', fontSize: 12, fontWeight: 600, color: '#15803d', backgroundColor: '#f0fdf4', borderRadius: 999 },
+  shiftRow: { display: 'grid', gridTemplateColumns: '64px 112px 1fr', alignItems: 'center', gap: 8, fontSize: 13 },
+  shiftName: { fontWeight: 700, color: '#0f172a' },
+  shiftTime: { textAlign: 'center', padding: '2px 10px', fontSize: 12, fontWeight: 600, color: '#15803d', backgroundColor: '#f0fdf4', borderRadius: 999 },
   shiftCount: { fontSize: 12, color: '#64748b' },
   noShift: { fontSize: 13, color: '#94a3b8', margin: '8px 0 0' },
 

@@ -129,12 +129,11 @@ export default function App() {
           presetDoctorId={booking.doctorId}
           onClose={closeBooking}
           onBooked={() => {
-            // Logic khi đặt lịch thành công
-            closeBooking();
-            navigateTo('/schedule');
+           // Đặt lịch thành công: Giữ nguyên ở modal, KHÔNG tự chuyển trang.
+            
           }}
           onViewSchedule={() => {
-            // Logic khi bấm nút xem lịch khám
+            // Logic khi bấm nút xem lịch khám-> chuyển trang lịch khám
             closeBooking();
             navigateTo('/schedule');
           }}

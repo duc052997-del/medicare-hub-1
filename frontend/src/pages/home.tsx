@@ -170,7 +170,9 @@ export default function Home({ user, nav, onBooking }: HomeProps) {
                   />
                   <h4 style={styles.doctorName}>{d.full_name}</h4>
                   <p style={styles.doctorSpec}>{d.specialty}</p>
-                  {d.bio && <p style={styles.doctorBio}>{d.bio}</p>}
+                  <div style={styles.doctorBioWrapper}>
+                    <p style={styles.doctorBio}>{d.bio || 'Đang cập nhật thông tin giới thiệu chuyên môn.'}</p>
+                  </div>
                   <button className="mh-btn" onClick={() => onBooking(d.id)} style={styles.btnSmallLine}>Đặt lịch với bác sĩ</button>
                 </div>
               ))}
@@ -203,7 +205,7 @@ const styles: Record<string, CSSProperties> = {
   btnPrimary: { padding: '13px 28px', fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', background: 'linear-gradient(135deg,#4f9cf9,#3b82f6)' },
   btnGhost: { padding: '13px 28px', fontSize: 15, fontWeight: 600, color: '#1e293b', backgroundColor: '#fff', border: '1.5px solid #bfdbfe', borderRadius: 10, cursor: 'pointer' },
   btnWhite: { padding: '13px 32px', fontSize: 15, fontWeight: 700, color: '#1d4ed8', backgroundColor: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer' },
-  btnSmallLine: { marginTop: 14, padding: '8px 16px', fontSize: 13, fontWeight: 600, color: '#2563eb', backgroundColor: '#e0efff', border: 'none', borderRadius: 8, cursor: 'pointer' },
+  btnSmallLine: { width: '85%', marginTop: 'auto', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#2563eb', backgroundColor: '#e0efff', border: 'none', borderRadius: 8, cursor: 'pointer', boxSizing: 'border-box' },
 
   hero: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 48, padding: '72px 48px', background: 'linear-gradient(135deg,#e6f1ff 0%,#f0f7ff 55%,#f8fbff 100%)' },
   heroText: { flex: 1, maxWidth: 560 },
@@ -232,16 +234,21 @@ const styles: Record<string, CSSProperties> = {
   stepNo: { width: 30, height: 30, borderRadius: '50%', margin: '0 auto', backgroundColor: '#2563eb', color: '#fff', fontWeight: 700, fontSize: 14, display: 'flex', justifyContent: 'center', alignItems: 'center' },
 
   carousel: { ...inner, position: 'relative' },
-  track: { display: 'flex', gap: 20, overflowX: 'auto', scrollSnapType: 'x mandatory', padding: '6px 2px 14px', scrollBehavior: 'smooth' },
+  track: { display: 'flex', gap: 20, overflowX: 'auto', scrollSnapType: 'x mandatory', padding: '6px 2px 14px', scrollBehavior: 'smooth', alignItems: 'stretch', scrollbarWidth: 'none' },
   arrow: { position: 'absolute', top: '42%', zIndex: 5, width: 40, height: 40, borderRadius: '50%', border: '1px solid #bfdbfe', backgroundColor: '#fff', color: '#2563eb', fontSize: 24, lineHeight: '36px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(15,23,42,.12)', transition: 'all .2s' },
-  doctorCard: { scrollSnapAlign: 'start', padding: 24, backgroundColor: '#fff', border: '1px solid #dbeafe', borderRadius: 16, textAlign: 'center', boxSizing: 'border-box' },
-  doctorImg: { width: 120, height: 120, borderRadius: '50%', objectFit: 'cover', border: '4px solid #dbeafe', margin: '0 auto 14px', display: 'block' },
-  doctorAvatar: { width: 120, height: 120, borderRadius: '50%', backgroundColor: '#e0efff', border: '4px solid #dbeafe', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: 52, margin: '0 auto 14px' },
-  doctorName: { fontSize: 17, fontWeight: 700, color: '#0f172a', margin: '0 0 4px' },
-  doctorSpec: { fontSize: 14, color: '#2563eb', fontWeight: 600, margin: '0 0 4px' },
-  doctorBio: { fontSize: 13, color: '#64748b', margin: 0, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' },
+  
+  // Cấu hình căn giữa các thành phần bên trong thẻ bác sĩ
+  doctorCard: { scrollSnapAlign: 'start', flex: '0 0 calc(33.333% - 14px)', width: 'calc(33.333% - 14px)', minWidth: 260, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 24, backgroundColor: '#fff', border: '1px solid #dbeafe', borderRadius: 16, textAlign: 'center', boxSizing: 'border-box' },
+  
+  doctorImg: { width: 120, height: 120, borderRadius: '50%', objectFit: 'cover', border: '4px solid #dbeafe', margin: '0 auto 14px', display: 'block', flexShrink: 0 },
+  doctorAvatar: { width: 120, height: 120, borderRadius: '50%', backgroundColor: '#e0efff', border: '4px solid #dbeafe', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: 52, margin: '0 auto 14px', flexShrink: 0 },
+  doctorName: { fontSize: 17, fontWeight: 700, color: '#0f172a', margin: '0 0 4px', minHeight: 24, textAlign: 'center', width: '100%' },
+  doctorSpec: { fontSize: 14, color: '#2563eb', fontWeight: 600, margin: '0 0 10px', minHeight: 20, textAlign: 'center', width: '100%' },
+  
+  doctorBioWrapper: { flexGrow: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', marginBottom: 16, width: '100%' },
+  doctorBio: { fontSize: 13, color: '#64748b', margin: 0, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center', width: '100%' },
+  
   doctorNote: { ...inner, fontSize: 15, color: '#64748b', padding: '24px 0' },
-
 
   ctaWrap: { padding: '72px 48px' },
   cta: { ...inner, padding: '48px 24px', textAlign: 'center', borderRadius: 24, background: 'linear-gradient(135deg,#dbeafe,#bfdbfe)', color: '#1e3a8a' },
