@@ -75,3 +75,37 @@ export interface NavHandlers {
   onRegister: () => void;
   onLogout: () => void;
 }
+
+// ---------- Sprint 3: lịch hẹn (API-09, API-10) ----------
+export type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'COMPLETED' | 'CANCELLED';
+ 
+// Đối tượng 'appointment' dùng chung trong hợp đồng
+export interface Appointment {
+  id: string;
+  doctor: Pick<Doctor, 'id' | 'full_name' | 'specialty'>;
+  appointment_date: string; // YYYY-MM-DD
+  start_time: string; // HH:mm
+  end_time: string; // HH:mm
+  symptoms: string | null;
+  status: AppointmentStatus;
+  cancel_reason: string | null;
+  created_at: string;
+}
+ 
+// API-09 request. Hợp đồng: request snake_case; chuyên khoa chỉ là bộ lọc trên FE, không gửi
+export interface BookingPayload {
+  doctor_id: string | number;
+  date: string; // YYYY-MM-DD, không ở quá khứ
+  time: string; // HH:mm, phải là 1 slot trong lịch làm việc
+  symptoms: string; // bắt buộc, <= 500 ký tự
+}
+ 
+export interface BookingResult {
+  message: string;
+  appointment: Appointment;
+}
+ 
+// API-22 response (hủy lịch): appointment trả về với status CANCELLED
+
+ 
+// API-10 response
