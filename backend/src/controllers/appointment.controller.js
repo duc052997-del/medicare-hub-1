@@ -15,11 +15,21 @@ const VALID_STATUSES = new Set([
   'CANCELLED',
 ]);
 
+// Chuẩn hóa thời gian từ HH:mm:ss sang HH:mm
+// Theo hợp đồng API-10
+const formatTime = (time) => {
+  if (typeof time !== 'string') {
+    return time;
+  }
+
+  return time.slice(0, 5);
+};
+
 const getMyAppointments = async (req, res) => {
   try {
     const { status } = req.query;
 
-    // Kiểm tra trạng thái hợp lệ
+    // Bước 1: Kiểm tra trạng thái hợp lệ
     if (
       status !== undefined &&
       (typeof status !== 'string' || !VALID_STATUSES.has(status))
@@ -27,7 +37,7 @@ const getMyAppointments = async (req, res) => {
       return fail(res, 400, 'Trạng thái không hợp lệ');
     }
 
-    // JWT chứa users.id, cần tìm patients.id tương ứng
+    // Bước 2: JWT chứa users.id, tìm patients.id tương ứng
     const { data: patient, error: patientError } = await supabase
       .from('patients')
       .select('id')
@@ -48,7 +58,7 @@ const getMyAppointments = async (req, res) => {
       );
     }
 
-    // Chỉ truy vấn lịch hẹn của bệnh nhân đăng nhập
+    // Bước 3: Chỉ truy vấn lịch hẹn của bệnh nhân đăng nhập
     let query = supabase
       .from('appointments')
       .select(
@@ -58,7 +68,7 @@ const getMyAppointments = async (req, res) => {
       .order('appointment_date', { ascending: false })
       .order('start_time', { ascending: false });
 
-    // Lọc theo trạng thái nếu được cung cấp
+    // Bước 4: Lọc theo trạng thái nếu được cung cấp
     if (status !== undefined) {
       query = query.eq('status', status);
     }
@@ -69,7 +79,7 @@ const getMyAppointments = async (req, res) => {
       throw error;
     }
 
-    // Chưa có lịch sử đặt lịch
+    // Bước 5: Chưa có lịch sử đặt lịch
     if (!appointments || appointments.length === 0) {
       return success(
         res,
@@ -79,11 +89,20 @@ const getMyAppointments = async (req, res) => {
       );
     }
 
+    // Bước 6: Chuẩn hóa thời gian theo hợp đồng API-10
+    // PostgreSQL trả HH:mm:ss, API cần trả HH:mm
+    const formattedAppointments = appointments.map((appointment) => ({
+      ...appointment,
+      start_time: formatTime(appointment.start_time),
+      end_time: formatTime(appointment.end_time),
+    }));
+
+    // Bước 7: Trả về lịch sử đặt lịch
     return success(
       res,
       200,
       'Lấy lịch sử đặt lịch thành công',
-      { appointments }
+      { appointments: formattedAppointments }
     );
   } catch (error) {
     return serverError(
