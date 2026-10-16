@@ -5,7 +5,7 @@
 
 import { env } from '../config/env';
 import api from './api';
-import type { BookingPayload, BookingResult } from '../types';
+import type { Appointment, AppointmentStatus, BookingPayload, BookingResult } from '../types';
 const loadMock = () => import('./mocks/mockappointments');
 
 export const appointmentService = {
@@ -17,7 +17,12 @@ export const appointmentService = {
   },
 
   // API-10 GET /appointments/my  (Patient). status tùy chọn; chưa có lịch -> 200 với mảng rỗng
-  
+  // Response hợp đồng: { success, message, appointments: [...] }
+  async getMyAppointments(status?: AppointmentStatus): Promise<Appointment[]> {
+    if (env.USE_MOCK) return (await loadMock()).mockGetMy(status);
+    const res = await api.get('/appointments/my', { params: status ? { status } : {} });
+    return res.data?.appointments ?? [];
+  },
 
   // API-22 PATCH /appointments/:id/cancel  (Patient). reason tùy chọn, <= 255 ký tự
-}
+};

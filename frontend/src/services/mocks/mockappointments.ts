@@ -3,18 +3,19 @@
 // trong hợp đồng. Chống trùng giờ theo unique index của schema.sql (xem mockstore.ts).
 
 import { ApiError } from '../apierror';
-import type { Appointment, BookingPayload, BookingResult } from '../../types';
+import type { Appointment, AppointmentStatus, BookingPayload, BookingResult } from '../../types';
 import { MOCK_DOCTORS } from './mockdata';
 import { mockCurrentUser } from './mockauth';
 import { getDaySlots } from './mockdoctors';
-import { MockAppointment, addAppointment, isSlotTaken, patientHasSlot } from './mockstore';
+import { MockAppointment, addAppointment, isSlotTaken, listByPatient, patientHasSlot } from './mockstore';
 import { delay, flag } from './mockutils';
-import { isRealDate, timeNowVN, todayVN } from '../../utils/schedule';
+import { isRealDate, isSlotBookable, maxBookingDate, timeNowVN, todayVN } from '../../utils/schedule';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_SYMPTOMS = 500;
 const FORBIDDEN = 'Bạn không có quyền truy cập chức năng này';
 const SERVER_ERROR = 'Đã có lỗi xảy ra, vui lòng thử lại sau';
+const STATUSES: AppointmentStatus[] = ['PENDING', 'CONFIRMED', 'REJECTED', 'COMPLETED', 'CANCELLED'];
 
 // Tester bật localStorage mock_error_500 = '1' để thử nhánh lỗi 500
 const maybeFail = () => {
@@ -68,6 +69,14 @@ export const mockBook = async (payload: BookingPayload): Promise<BookingResult> 
   if (f.date < todayVN() || (f.date === todayVN() && f.time <= timeNowVN())) {
     throw new ApiError(400, 'Không thể đặt lịch trong quá khứ');
   }
+  // Luật mới UC006 (đề xuất, chờ BE + nhóm chốt vào hợp đồng API-09):
+  // chỉ đặt trong vòng 30 ngày kể từ ngày mai, và trước giờ khám ít nhất 24 giờ.
+  if (f.date > maxBookingDate()) {
+    throw new ApiError(400, 'Chỉ được đặt lịch trong vòng 30 ngày kể từ ngày mai', undefined, 'date');
+  }
+  if (!isSlotBookable(f.date, f.time)) {
+    throw new ApiError(400, 'Vui lòng đặt lịch trước giờ khám ít nhất 24 giờ', undefined, 'time');
+  }
 
   const doctor = MOCK_DOCTORS.find((d) => String(d.id) === f.doctor_id && d.is_active);
   if (!doctor) throw new ApiError(404, 'Không tìm thấy bác sĩ');
@@ -102,7 +111,19 @@ export const mockBook = async (payload: BookingPayload): Promise<BookingResult> 
 };
 
 // ================= API-10  GET /appointments/my =================
+// Chỉ trả lịch của chính người đăng nhập, sắp theo ngày giảm dần; chưa có lịch -> mảng rỗng (200).
+export const mockGetMy = async (status?: string): Promise<Appointment[]> => {
+  await delay(150, 400);
+  maybeFail();
+  const user = requirePatient();
 
+  if (status && !STATUSES.includes(status as AppointmentStatus)) throw new ApiError(400, 'Trạng thái không hợp lệ');
+
+  return listByPatient(user.id)
+    .filter((a) => !status || a.status === status)
+    .sort((a, b) => `${b.appointment_date} ${b.start_time}`.localeCompare(`${a.appointment_date} ${a.start_time}`))
+    .map(toPublic);
+};
 
 // ================= API-22  PATCH /appointments/:id/cancel =================
 // Hủy = đổi status thành CANCELLED (không xóa dòng) để giải phóng khung giờ.
