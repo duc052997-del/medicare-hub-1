@@ -182,3 +182,5 @@ export const mockLogout = async (): Promise<void> => {
   const { token } = verifyToken();
   revokedTokens.add(token);
 };
+// Sprint 3: cho các mock khác biết "ai đang gọi" (tương đương req.user ở backend)
+export const mockCurrentUser = () => verifyToken().payload;
