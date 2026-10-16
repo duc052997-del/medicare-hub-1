@@ -76,8 +76,8 @@ describe('UC007 - GET /api/appointments/my', () => {
     };
 
     // Mock Supabase Query Builder
-    // .order() và .eq() phải trả về query để gọi nối tiếp.
-    // .then() giúp await query nhận kết quả.
+    // .order() và .eq() trả về query để gọi nối tiếp.
+    // .then() mô phỏng kết quả khi await query.
     appointmentQuery = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
@@ -110,7 +110,9 @@ describe('UC007 - GET /api/appointments/my', () => {
     jest.restoreAllMocks();
   });
 
+  // =====================================================
   // UT01 - Bệnh nhân có lịch hẹn
+  // =====================================================
   test('UT01 - Trả về HTTP 200 khi có lịch hẹn', async () => {
     await getMyAppointments(req, res);
 
@@ -130,7 +132,9 @@ describe('UC007 - GET /api/appointments/my', () => {
     );
   });
 
+  // =====================================================
   // UT02 - Bệnh nhân chưa có lịch hẹn
+  // =====================================================
   test('UT02 - Trả về mảng rỗng khi chưa có lịch hẹn', async () => {
     appointmentResult = {
       data: [],
@@ -150,7 +154,9 @@ describe('UC007 - GET /api/appointments/my', () => {
     );
   });
 
+  // =====================================================
   // UT03 - Lọc trạng thái COMPLETED
+  // =====================================================
   test('UT03 - Lọc lịch hẹn theo trạng thái COMPLETED', async () => {
     req.query.status = 'COMPLETED';
 
@@ -185,7 +191,9 @@ describe('UC007 - GET /api/appointments/my', () => {
     );
   });
 
+  // =====================================================
   // UT04 - Trạng thái không hợp lệ
+  // =====================================================
   test('UT04 - Trả về HTTP 400 khi status không hợp lệ', async () => {
     req.query.status = 'INVALID';
 
@@ -203,7 +211,9 @@ describe('UC007 - GET /api/appointments/my', () => {
     expect(supabase.from).not.toHaveBeenCalled();
   });
 
+  // =====================================================
   // UT05 - Không tìm thấy hồ sơ bệnh nhân
+  // =====================================================
   test('UT05 - Trả về HTTP 200 khi chưa có hồ sơ bệnh nhân', async () => {
     patientQuery.maybeSingle.mockResolvedValue({
       data: null,
@@ -227,7 +237,9 @@ describe('UC007 - GET /api/appointments/my', () => {
     );
   });
 
+  // =====================================================
   // UT06 - Lỗi truy vấn patients
+  // =====================================================
   test('UT06 - Trả về HTTP 500 khi truy vấn patients lỗi', async () => {
     patientQuery.maybeSingle.mockResolvedValue({
       data: null,
@@ -245,7 +257,9 @@ describe('UC007 - GET /api/appointments/my', () => {
     );
   });
 
+  // =====================================================
   // UT07 - Lỗi truy vấn appointments
+  // =====================================================
   test('UT07 - Trả về HTTP 500 khi truy vấn appointments lỗi', async () => {
     appointmentResult = {
       data: null,
@@ -263,7 +277,9 @@ describe('UC007 - GET /api/appointments/my', () => {
     );
   });
 
+  // =====================================================
   // UT08 - Chỉ lấy lịch của bệnh nhân đăng nhập
+  // =====================================================
   test('UT08 - Lọc lịch hẹn bằng patient_id từ JWT', async () => {
     await getMyAppointments(req, res);
 
@@ -278,7 +294,9 @@ describe('UC007 - GET /api/appointments/my', () => {
     );
   });
 
+  // =====================================================
   // UT09 - Sắp xếp lịch hẹn mới nhất trước
+  // =====================================================
   test('UT09 - Sắp xếp theo ngày khám giảm dần', async () => {
     await getMyAppointments(req, res);
 
@@ -299,7 +317,9 @@ describe('UC007 - GET /api/appointments/my', () => {
     expect(appointmentQuery.order).toHaveBeenCalledTimes(2);
   });
 
+  // =====================================================
   // UT10 - Không chấp nhận status dạng mảng
+  // =====================================================
   test('UT10 - Trả về HTTP 400 khi status là mảng', async () => {
     req.query.status = ['PENDING', 'CONFIRMED'];
 
@@ -315,5 +335,28 @@ describe('UC007 - GET /api/appointments/my', () => {
     );
 
     expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  // =====================================================
+  // UT11 - Chuẩn hóa thời gian theo hợp đồng API-10
+  // =====================================================
+  test('UT11 - Trả về start_time và end_time theo HH:mm', async () => {
+    await getMyAppointments(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        message: 'Lấy lịch sử đặt lịch thành công',
+        appointments: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'appointment-001',
+            start_time: '10:00',
+            end_time: '10:30',
+          }),
+        ]),
+      })
+    );
   });
 });
