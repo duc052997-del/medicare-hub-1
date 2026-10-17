@@ -268,6 +268,7 @@ export default function BookingModal({ user, presetDoctorId = '', onClose, onBoo
   };
 
   const bookAnother = () => {
+    setErrors({}); 
     setBooked(null);
     setBanner(null);
     setDoctorId('');
@@ -342,7 +343,7 @@ export default function BookingModal({ user, presetDoctorId = '', onClose, onBoo
                   </option>
                   {doctorOptions.map((d) => (
                     <option key={d.id} value={String(d.id)}>
-                      {d.full_name} - {d.specialty}
+                      {d.full_name} ({d.specialty})
                     </option>
                   ))}
                 </select>

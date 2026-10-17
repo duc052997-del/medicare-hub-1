@@ -1,6 +1,6 @@
 // utils/schedule.ts
 // Xử lý khung giờ: đổi giờ <-> phút, gom khung giờ thành ca làm việc.
-// Dùng cho trang Bác sĩ, khung đặt lịch (UC006) và mock.
+// Dùng cho trang Bác sĩ, khung đặt lịch (UC006), lịch sử đặt lịch (UC007) và mock.
 
 import type { Slot } from '../types';
 
@@ -98,6 +98,12 @@ const wallMs = (day: string, time: string) => {
 // Ví dụ bây giờ 22:12 thì ngày mai chỉ đặt được các khung từ 22:30 trở đi.
 export const isSlotBookable = (day: string, time: string) =>
   wallMs(day, time) - (Date.now() + VN_OFFSET_MS) >= BOOKING_MIN_HOURS * 60 * 60 * 1000;
+
+// ---------- Quy tắc hủy lịch UC007 (SRS: chỉ hủy trước giờ khám ít nhất 2 giờ) ----------
+export const CANCEL_MIN_HOURS = 2;
+
+export const isCancelWindowOpen = (day: string, time: string) =>
+  wallMs(day, time) - (Date.now() + VN_OFFSET_MS) >= CANCEL_MIN_HOURS * 60 * 60 * 1000;
 
 // Độ dài 1 khung (phút) của một danh sách slot trả từ API-08
 export const slotMinutes = (slots: Slot[]) =>

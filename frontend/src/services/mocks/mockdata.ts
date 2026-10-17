@@ -98,11 +98,3 @@ export const MOCK_SCHEDULES: MockScheduleBlock[] = MOCK_DOCTORS.filter((d) => d.
     { doctor_id: d.id, day_of_week: dow, start_time: '13:00', end_time: '17:00', slot_minutes: 30 },
   ])
 );
-
-// Lịch hẹn mẫu (theo seed.sql). Khung giờ đã có lịch PENDING/CONFIRMED/COMPLETED
-// được trả available=false. Hình dạng response KHÔNG đổi so với hợp đồng (API-08).
-export const MOCK_BOOKED_SLOTS = [
-  { doctor_id: uid(201), appointment_date: '2026-10-12', start_time: '09:00' },
-  { doctor_id: uid(202), appointment_date: '2026-10-13', start_time: '10:00' },
-  { doctor_id: uid(203), appointment_date: '2026-09-20', start_time: '14:00' },
-];
