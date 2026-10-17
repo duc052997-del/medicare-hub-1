@@ -6,69 +6,17 @@
 
 const supabase = require('../config/supabase.config');
 const { success, fail, serverError } = require('../utils/response');
+const {
+  UUID_REGEX,
+  isValidCalendarDate,
+  getTodayInVietnam,
+  getDayOfWeek,
+  generateSlotsFromBlock
+} = require('../utils/schedule');
 
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-// Chỉ đúng định dạng YYYY-MM-DD thôi chưa đủ: "2026-13-45" cũng khớp regex
-// trên nhưng tháng 13 / ngày 45 không có thật. new Date() của JS lại tự động
-// "cuộn" ngày sai thành 1 ngày khác hợp lệ (không báo lỗi), nên phải tự kiểm
-// tra lại xem ngày/tháng/năm dựng lại từ Date có khớp với số người dùng
-// truyền vào hay không.
-const isValidCalendarDate = (dateStr) => {
-  if (!DATE_REGEX.test(dateStr)) return false;
-
-  const [year, month, day] = dateStr.split('-').map(Number);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
-
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  );
-};
-
-// Ngày hôm nay theo giờ Việt Nam (UTC+7), dùng làm mặc định khi FE không
-// truyền ?date= - khớp với mock UI để sẵn "Ngày khám: Hôm nay".
-const getTodayInVietnam = () => {
-  const now = new Date();
-  const vnOffsetMs = 7 * 60 * 60 * 1000;
-  const vnTime = new Date(now.getTime() + vnOffsetMs);
-  return vnTime.toISOString().slice(0, 10); // "YYYY-MM-DD"
-};
-
-// Thu trong tuan cua 1 ngay (0 = Chu Nhat, 1 = Thu Hai, ..., 6 = Thu Bay).
-// Dung mang UTC de ket qua on dinh, khong phu thuoc mui gio server dang chay.
-const getDayOfWeek = (dateStr) => new Date(`${dateStr}T00:00:00Z`).getUTCDay();
-
-// "08:00:00" -> 480 (so phut tinh tu 00:00)
-const timeToMinutes = (timeStr) => {
-  const [h, m] = timeStr.split(':').map(Number);
-  return h * 60 + m;
-};
-
-// 480 -> "08:00"
-const minutesToTime = (totalMinutes) => {
-  const h = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
-  const m = String(totalMinutes % 60).padStart(2, '0');
-  return `${h}:${m}`;
-};
-
-// Sinh danh sach khung gio tu 1 dong lich lam viec (start_time -> end_time,
-// buoc nhay la slot_minutes). VD 08:00-12:00, slot_minutes=30 ->
-// 08:00, 08:30, 09:00, ..., 11:30 (khong bao gom chinh end_time).
-const generateSlotsFromBlock = (block) => {
-  const start = timeToMinutes(block.start_time);
-  const end = timeToMinutes(block.end_time);
-  const step = block.slot_minutes > 0 ? block.slot_minutes : 30;
-
-  const times = [];
-  for (let t = start; t < end; t += step) {
-    times.push(minutesToTime(t));
-  }
-  return times;
-};
+// Trạng thái lịch hẹn vẫn còn "chiếm chỗ" (xem Quy ước chung trong hợp đồng
+// API) - chỉ các trạng thái này mới khóa khung giờ của bác sĩ.
+const SLOT_TAKEN_STATUSES = ['PENDING', 'CONFIRMED', 'COMPLETED'];
 
 // GET /api/doctors - danh sách đầy đủ, lọc theo chuyên khoa (UC005, bước 2)
 // Query param tùy chọn: ?specialty=Noi+tong+quat
@@ -170,12 +118,27 @@ const getDoctorSchedule = async (req, res) => {
       });
     }
 
-    // CHƯA CÓ bảng lịch hẹn đã đặt (appointments/bookings) trong hệ thống,
-    // nên hiện tại KHÔNG xác định được khung giờ nào đã có người đặt - tất
-    // cả slot sinh ra đều trả về available: true. Khi UC đặt lịch khám được
-    // làm (có bảng appointments), chỗ này cần join thêm để set available
-    // thành false cho khung giờ đã bị đặt, đúng như mock UI (gạch chéo).
-    const slots = times.map((time) => ({ time, available: true }));
+    // [UC006-BE] Giờ đã có bảng appointments: lấy các khung giờ của đúng
+    // bác sĩ + đúng ngày đang còn "chiếm chỗ" (PENDING/CONFIRMED/COMPLETED -
+    // CANCELLED/REJECTED thì không tính), để đánh dấu available=false đúng
+    // như mock UI (gạch chéo). Trước đây luôn trả available=true vì chưa có
+    // bảng này.
+    const { data: bookedRows, error: bookedError } = await supabase
+      .from('appointments')
+      .select('start_time')
+      .eq('doctor_id', id)
+      .eq('appointment_date', date)
+      .in('status', SLOT_TAKEN_STATUSES);
+    if (bookedError) throw bookedError;
+
+    const bookedTimes = new Set(
+      (bookedRows || []).map((row) => row.start_time.slice(0, 5))
+    );
+
+    const slots = times.map((time) => ({
+      time,
+      available: !bookedTimes.has(time)
+    }));
 
     return success(res, 200, 'Lấy lịch trống thành công', {
       doctor,
