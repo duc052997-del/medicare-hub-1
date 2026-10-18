@@ -1,7 +1,7 @@
 // components/appointmenthistory.tsx — UC007: Lịch sử đặt lịch của bệnh nhân (trang Lịch khám).
 // Bố cục giống trang Bác sĩ: thẻ bộ lọc nổi lên dải banner, bên dưới là danh sách.
 // Gọi API-10 GET /appointments/my MỘT lần, lọc phía client (tìm kiếm, trạng thái, ngày khám).
-// Lịch PENDING còn trước giờ khám >= 2 giờ có nút "Hủy lịch" (API-22).
+// Lịch PENDING có nút "Hủy lịch" (API-22).
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import SafeImage from './safeimage';
@@ -9,7 +9,7 @@ import { appointmentService } from '../services/appointmentservice';
 import { doctorService } from '../services/doctorservice';
 import { ApiError } from '../services/apierror';
 import { formatDate } from '../utils/helpers';
-import { CANCEL_MIN_HOURS, formatDateTimeVN, isCancelWindowOpen } from '../utils/schedule';
+import { formatDateTimeVN } from '../utils/schedule';
 import { inner } from '../styles/layout';
 import type { Appointment, AppointmentStatus, AuthUser, Doctor } from '../types';
 
@@ -19,6 +19,15 @@ const MAX_REASON = 255;
 const STALE_CODES = ['ALREADY_CANCELLED', 'CANNOT_CANCEL', 'CANCEL_TOO_LATE'];
 
 const STATUS_ORDER: AppointmentStatus[] = ['PENDING', 'CONFIRMED', 'COMPLETED', 'REJECTED', 'CANCELLED'];
+
+// Thứ tự ưu tiên hiển thị nhóm trạng thái khi chưa chọn bộ lọc
+const STATUS_PRIORITY: Record<AppointmentStatus, number> = {
+  PENDING: 1,
+  CONFIRMED: 2,
+  COMPLETED: 3,
+  REJECTED: 4,
+  CANCELLED: 5,
+};
 
 const STATUS_LABEL: Record<AppointmentStatus, string> = {
   PENDING: 'Chờ xác nhận',
@@ -149,7 +158,15 @@ export default function AppointmentHistory({ user, onLogin, onBooking, refreshKe
         }
         return true;
       })
-      .sort((a, b) => `${b.appointment_date} ${b.start_time}`.localeCompare(`${a.appointment_date} ${a.start_time}`));
+      .sort((a, b) => {
+        // Nếu chưa chọn trạng thái cụ thể -> Sắp xếp nhóm trạng thái theo thứ tự ưu tiên
+        if (!status) {
+          const pDiff = (STATUS_PRIORITY[a.status] ?? 99) - (STATUS_PRIORITY[b.status] ?? 99);
+          if (pDiff !== 0) return pDiff;
+        }
+        // Sắp xếp theo thời gian tăng dần (gần nhất / cũ nhất lên trên)
+        return `${a.appointment_date} ${a.start_time}`.localeCompare(`${b.appointment_date} ${b.start_time}`);
+      });
   }, [list, keyword, status, date]);
 
   const hasFilter = !!(keyword || status || date);
@@ -159,7 +176,7 @@ export default function AppointmentHistory({ user, onLogin, onBooking, refreshKe
     setDate('');
   };
 
-  // Chỉ lịch "Chờ xác nhận" 
+  // Chỉ lịch "Chờ xác nhận" có nút hủy
   const canCancel = (a: Appointment) => a.status === 'PENDING';
 
   const openCancel = (a: Appointment) => {
@@ -471,7 +488,7 @@ const styles: Record<string, CSSProperties> = {
   times: { display: 'flex', flexWrap: 'wrap', gap: '4px 18px', marginTop: 4, paddingTop: 8, borderTop: '1px solid #f1f5f9', fontSize: 12, color: '#94a3b8' },
 
   aside: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 20, marginLeft: 'auto', flexShrink: 0 },
-  statusBadge: { padding: '4.5px 13.5px', fontSize: 13.5, fontWeight: 700, borderRadius: 999, whiteSpace: 'nowrap' }, // 0,75 lần bản trước (6px 18px, 18px)
+  statusBadge: { padding: '4.5px 13.5px', fontSize: 13.5, fontWeight: 700, borderRadius: 999, whiteSpace: 'nowrap' },
 
   notice: { padding: '12px 14px', marginBottom: 16, borderRadius: 8, fontSize: 14 },
   noticeOk: { color: '#15803d', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' },
@@ -479,7 +496,7 @@ const styles: Record<string, CSSProperties> = {
 
   btnPrimary: { ...btn, padding: '10px 26px', color: '#fff', border: 'none', background: 'linear-gradient(135deg,#4f9cf9,#3b82f6)' },
   btnLine: { ...btn, padding: '10px 22px', color: '#2563eb', backgroundColor: '#fff', border: '1.5px solid #2563eb' },
-  btnCancel: { ...btn, padding: '7.5px 18px', fontSize: 15, color: '#dc2626', backgroundColor: '#fff', border: '1.5px solid #dc2626' }, // 0,75 lần bản trước (10px 24px, 20px)
+  btnCancel: { ...btn, padding: '7.5px 18px', fontSize: 15, color: '#dc2626', backgroundColor: '#fff', border: '1.5px solid #dc2626' },
   btnDanger: { ...btn, padding: '10px 22px', color: '#fff', backgroundColor: '#dc2626', border: 'none' },
 
   // Hộp thoại hủy lịch

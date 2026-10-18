@@ -40,6 +40,8 @@ export default function App() {
   const [showLogout, setShowLogout] = useState(false);
   // Khung đặt lịch đè lên trang đang mở (UC006); doctorId có khi bấm "Đặt lịch" ở thẻ bác sĩ
   const [booking, setBooking] = useState<{ open: boolean; doctorId: string }>({ open: false, doctorId: '' });
+  // Dùng để làm mới trang lịch khám khi đặt lịch thành công
+  const [refreshKey, setRefreshKey] = useState(0);
   
   useEffect(() => {
     const onPop = () => setCurrentPath(window.location.pathname);
@@ -108,7 +110,7 @@ export default function App() {
     <div>
       {(currentPath === '/' || currentPath === '/home') && <Home user={user} nav={nav} onBooking={handleBooking} />}
       {currentPath === '/doctors' && <DoctorsPage user={user} nav={nav} onBooking={handleBooking} />}
-      {currentPath === '/schedule' && <SchedulePage user={user} nav={nav} onBooking={handleBooking} />}
+      {currentPath === '/schedule' && <SchedulePage user={user} nav={nav} onBooking={handleBooking} refreshKey={refreshKey} />}
       {currentPath === '/contact' && <ContactPage user={user} nav={nav} />}
 
       {currentPath === '/login' && !user && (
@@ -122,18 +124,17 @@ export default function App() {
       )}
       {currentPath === '/register' && !user && <Register onSwitchToLogin={nav.onLogin} />}
 
-      
       {booking.open && user && (
         <BookingModal
           user={user}
           presetDoctorId={booking.doctorId}
           onClose={closeBooking}
           onBooked={() => {
-           // Đặt lịch thành công: Giữ nguyên ở modal, KHÔNG tự chuyển trang.
-            
+            // Đặt lịch thành công: Cập nhật refreshKey để tải lại lịch sử khi xem
+            setRefreshKey((k) => k + 1);
           }}
           onViewSchedule={() => {
-            // Logic khi bấm nút xem lịch khám-> chuyển trang lịch khám
+            // Logic khi bấm nút xem lịch khám -> chuyển trang lịch khám
             closeBooking();
             navigateTo('/schedule');
           }}

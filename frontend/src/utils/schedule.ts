@@ -99,12 +99,6 @@ const wallMs = (day: string, time: string) => {
 export const isSlotBookable = (day: string, time: string) =>
   wallMs(day, time) - (Date.now() + VN_OFFSET_MS) >= BOOKING_MIN_HOURS * 60 * 60 * 1000;
 
-// ---------- Quy tắc hủy lịch UC007 (SRS: chỉ hủy trước giờ khám ít nhất 2 giờ) ----------
-export const CANCEL_MIN_HOURS = 2;
-
-export const isCancelWindowOpen = (day: string, time: string) =>
-  wallMs(day, time) - (Date.now() + VN_OFFSET_MS) >= CANCEL_MIN_HOURS * 60 * 60 * 1000;
-
 // Độ dài 1 khung (phút) của một danh sách slot trả từ API-08
 export const slotMinutes = (slots: Slot[]) =>
   detectStep(slots.map((s) => toMinutes(s.time)).sort((a, b) => a - b));
