@@ -1,9 +1,11 @@
 // services/mocks/mockstore.ts
 // "Bảng appointments" của mock. Lưu localStorage (khóa mock_appointments) để F5 không mất;
 // nút MOCK MODE xóa mọi khóa bắt đầu bằng mock_ nên reset được.
-// Lần đầu tự nạp 3 lịch mẫu đúng như seed.sql.
+// Lần đầu tự nạp lịch mẫu: 3 lịch đúng như seed.sql + 2 lịch ở tương lai (1 chờ xác nhận, 1 đã hủy)
+// để thử UC007 (nút Hủy, hiển thị thời gian hủy) mà không phải đặt lịch trước.
 
 import type { AppointmentStatus } from '../../types';
+import { addDays, todayVN } from '../../utils/schedule';
 import { MOCK_DOCTORS, SEED_USERS } from './mockdata';
 
 export interface MockAppointment {
@@ -16,6 +18,7 @@ export interface MockAppointment {
   symptoms: string | null;
   status: AppointmentStatus;
   cancel_reason: string | null;
+  cancelled_at: string | null;
   created_at: string;
 }
 
@@ -24,9 +27,21 @@ const KEY = 'mock_appointments';
 const userId = (email: string) => SEED_USERS.find((u) => u.email === email)!.id;
 const doctorId = (name: string) => MOCK_DOCTORS.find((d) => d.full_name === name)!.id;
 
+// Ngày làm việc (Thứ 2-6) đầu tiên cách hôm nay ít nhất `minDays` ngày
+const nextWeekday = (minDays: number) => {
+  let day = addDays(todayVN(), minDays);
+  for (let i = 0; i < 7; i++) {
+    const dow = new Date(`${day}T00:00:00Z`).getUTCDay();
+    if (dow >= 1 && dow <= 5) break;
+    day = addDays(day, 1);
+  }
+  return day;
+};
+
 const seedRow = (
   n: number, patientEmail: string, doctorName: string, date: string, start: string, end: string,
-  symptoms: string, status: AppointmentStatus
+  symptoms: string, status: AppointmentStatus,
+  extra: Partial<Pick<MockAppointment, 'cancel_reason' | 'cancelled_at' | 'created_at'>> = {}
 ): MockAppointment => ({
   id: `00000000-0000-4000-8000-${String(900 + n).padStart(12, '0')}`,
   patient_id: userId(patientEmail),
@@ -36,15 +51,21 @@ const seedRow = (
   end_time: end,
   symptoms,
   status,
-  cancel_reason: null,
-  created_at: '2026-10-06T02:00:00Z',
+  cancel_reason: extra.cancel_reason ?? null,
+  cancelled_at: extra.cancelled_at ?? null,
+  created_at: extra.created_at ?? '2026-10-06T02:00:00Z',
 });
 
-// Cùng dữ liệu với phần "lịch hẹn mẫu" của seed.sql
-const SEED: MockAppointment[] = [
+const buildSeed = (): MockAppointment[] => [
+  // Cùng dữ liệu với phần "lịch hẹn mẫu" của seed.sql
   seedRow(1, 'patient1@medicare.test', 'BS. Phạm Minh Đức', '2026-10-12', '09:00', '09:30', 'Đau tức ngực nhẹ', 'CONFIRMED'),
   seedRow(2, 'patient2@medicare.test', 'BS. Hoàng Thu Hà', '2026-10-13', '10:00', '10:30', 'Sốt, ho', 'PENDING'),
   seedRow(3, 'patient1@medicare.test', 'BS. Vũ Quang Huy', '2026-09-20', '14:00', '14:30', 'Nổi mẩn đỏ', 'COMPLETED'),
+  // Thêm cho UC007: lịch tương lai còn hủy được + lịch đã hủy (có thời gian hủy, lý do)
+  seedRow(4, 'patient1@medicare.test', 'BS. Đặng Mai Lan', nextWeekday(5), '08:30', '09:00', 'Đau đầu, mệt mỏi kéo dài', 'PENDING',
+    { created_at: new Date().toISOString() }),
+  seedRow(5, 'patient1@medicare.test', 'BS. Bùi Anh Tuấn', nextWeekday(8), '15:00', '15:30', 'Hồi hộp, khó thở khi leo cầu thang', 'CANCELLED',
+    { cancel_reason: 'Bận việc đột xuất', cancelled_at: new Date().toISOString(), created_at: new Date().toISOString() }),
 ];
 
 let memory: MockAppointment[] | null = null; // dự phòng khi localStorage không dùng được
@@ -53,10 +74,11 @@ export const loadAppointments = (): MockAppointment[] => {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return JSON.parse(raw) as MockAppointment[];
-    localStorage.setItem(KEY, JSON.stringify(SEED));
-    return [...SEED];
+    const seed = buildSeed();
+    localStorage.setItem(KEY, JSON.stringify(seed));
+    return seed;
   } catch {
-    return (memory ??= [...SEED]);
+    return (memory ??= buildSeed());
   }
 };
 

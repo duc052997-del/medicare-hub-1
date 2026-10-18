@@ -1,18 +1,23 @@
 // services/mocks/mockappointments.ts
-// Giả lập API-09 (đặt lịch) và API-10 (lịch sử của tôi): đúng thứ tự kiểm tra, mã lỗi và thông báo
-// trong hợp đồng. Chống trùng giờ theo unique index của schema.sql (xem mockstore.ts).
+// Giả lập API-09 (đặt lịch), API-10 (lịch sử của tôi), API-22 (hủy lịch): đúng thứ tự kiểm tra,
+// mã lỗi và thông báo trong hợp đồng. Chống trùng giờ theo unique index của schema.sql (xem mockstore.ts).
 
 import { ApiError } from '../apierror';
-import type { Appointment, AppointmentStatus, BookingPayload, BookingResult } from '../../types';
+import type { Appointment, AppointmentStatus, BookingPayload, BookingResult, CancelResult } from '../../types';
 import { MOCK_DOCTORS } from './mockdata';
 import { mockCurrentUser } from './mockauth';
 import { getDaySlots } from './mockdoctors';
-import { MockAppointment, addAppointment, isSlotTaken, listByPatient, patientHasSlot } from './mockstore';
+import {
+  MockAppointment, addAppointment, findAppointment, isSlotTaken, listByPatient, patientHasSlot, updateAppointment,
+} from './mockstore';
 import { delay, flag } from './mockutils';
-import { isRealDate, isSlotBookable, maxBookingDate, timeNowVN, todayVN } from '../../utils/schedule';
+import {
+  isRealDate, isSlotBookable, maxBookingDate, timeNowVN, todayVN,
+} from '../../utils/schedule';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_SYMPTOMS = 500;
+const MAX_CANCEL_REASON = 255;
 const FORBIDDEN = 'Bạn không có quyền truy cập chức năng này';
 const SERVER_ERROR = 'Đã có lỗi xảy ra, vui lòng thử lại sau';
 const STATUSES: AppointmentStatus[] = ['PENDING', 'CONFIRMED', 'REJECTED', 'COMPLETED', 'CANCELLED'];
@@ -40,6 +45,7 @@ const toPublic = (a: MockAppointment): Appointment => {
     symptoms: a.symptoms,
     status: a.status,
     cancel_reason: a.cancel_reason,
+    cancelled_at: a.cancelled_at ?? null,
     created_at: a.created_at,
   };
 };
@@ -69,8 +75,7 @@ export const mockBook = async (payload: BookingPayload): Promise<BookingResult> 
   if (f.date < todayVN() || (f.date === todayVN() && f.time <= timeNowVN())) {
     throw new ApiError(400, 'Không thể đặt lịch trong quá khứ');
   }
-  // Luật mới UC006 (đề xuất, chờ BE + nhóm chốt vào hợp đồng API-09):
-  // chỉ đặt trong vòng 30 ngày kể từ ngày mai, và trước giờ khám ít nhất 24 giờ.
+  // Luật mới UC006: chỉ đặt trong vòng 30 ngày kể từ ngày mai, và trước giờ khám ít nhất 24 giờ.
   if (f.date > maxBookingDate()) {
     throw new ApiError(400, 'Chỉ được đặt lịch trong vòng 30 ngày kể từ ngày mai', undefined, 'date');
   }
@@ -88,7 +93,6 @@ export const mockBook = async (payload: BookingPayload): Promise<BookingResult> 
   if (isSlotTaken(doctor.id, f.date, f.time)) {
     throw new ApiError(409, 'Khung giờ đã có người đặt, vui lòng chọn khung giờ khác', 'SLOT_TAKEN');
   }
-  // schema.sql còn index chống 1 bệnh nhân đặt 2 lịch cùng giờ; hợp đồng chưa nói mã lỗi riêng -> dùng SLOT_TAKEN
   if (patientHasSlot(user.id, f.date, f.time)) {
     throw new ApiError(409, 'Bạn đã có lịch khám khác vào khung giờ này, vui lòng chọn khung giờ khác', 'SLOT_TAKEN');
   }
@@ -103,6 +107,7 @@ export const mockBook = async (payload: BookingPayload): Promise<BookingResult> 
     symptoms: f.symptoms,
     status: 'PENDING', // "Chờ xác nhận"
     cancel_reason: null,
+    cancelled_at: null,
     created_at: new Date().toISOString(),
   };
   addAppointment(created);
@@ -126,4 +131,35 @@ export const mockGetMy = async (status?: string): Promise<Appointment[]> => {
 };
 
 // ================= API-22  PATCH /appointments/:id/cancel =================
-// Hủy = đổi status thành CANCELLED (không xóa dòng) để giải phóng khung giờ.
+// Hủy = đổi status thành CANCELLED (không xóa dòng) khi lịch ở trạng thái PENDING (chưa xác nhận).
+export const mockCancel = async (id: string, reason?: string): Promise<CancelResult> => {
+  await delay();
+  maybeFail();
+  const user = requirePatient();
+
+  const reasonText = text(reason);
+  if (reasonText.length > MAX_CANCEL_REASON) {
+    throw new ApiError(400, `Lý do hủy tối đa ${MAX_CANCEL_REASON} ký tự`, undefined, 'reason');
+  }
+
+  // Lịch của người khác cũng trả 404 để không lộ sự tồn tại của lịch
+  const found = findAppointment(id);
+  if (!found || found.patient_id !== user.id) throw new ApiError(404, 'Không tìm thấy lịch hẹn');
+
+  if (found.status === 'CANCELLED') {
+    throw new ApiError(409, 'Lịch hẹn này đã được hủy trước đó', 'ALREADY_CANCELLED');
+  }
+  
+  // Chỉ cho phép hủy khi lịch hẹn đang ở trạng thái PENDING (chưa xác nhận)
+  if (found.status !== 'PENDING') {
+    throw new ApiError(400, 'Chỉ có thể hủy lịch hẹn khi chưa xác nhận', 'CANNOT_CANCEL');
+  }
+
+  const updated = updateAppointment(id, {
+    status: 'CANCELLED',
+    cancel_reason: reasonText || null,
+    cancelled_at: new Date().toISOString(),
+  });
+
+  return { message: 'Hủy lịch hẹn thành công', appointment: toPublic(updated!) };
+};

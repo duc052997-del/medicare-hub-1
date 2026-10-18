@@ -1,6 +1,6 @@
 // utils/schedule.ts
 // Xử lý khung giờ: đổi giờ <-> phút, gom khung giờ thành ca làm việc.
-// Dùng cho trang Bác sĩ, khung đặt lịch (UC006) và mock.
+// Dùng cho trang Bác sĩ, khung đặt lịch (UC006), lịch sử đặt lịch (UC007) và mock.
 
 import type { Slot } from '../types';
 

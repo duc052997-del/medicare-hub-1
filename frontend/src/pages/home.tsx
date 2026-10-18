@@ -104,7 +104,7 @@ export default function Home({ user, nav, onBooking }: HomeProps) {
           </p>
           <div style={styles.heroBtns}>
             <button className="mh-btn" onClick={() => onBooking()} style={styles.btnPrimary}>Đặt lịch khám ngay</button>
-            <button className="mh-btn" onClick={() => scrollTo('schedule')} style={styles.btnGhost}>Xem lịch khám</button>
+            <button className="mh-btn" onClick={nav.onSchedule} style={styles.btnGhost}>Xem lịch khám</button>
           </div>
         </div>
         <HeroBanner src={getAsset('1')} />
