@@ -70,6 +70,7 @@ export interface NavHandlers {
   onHome: () => void;
   onDoctors: () => void;
   onSchedule: () => void;
+  onRecords: () => void;   // thêm dòng này
   onContact: () => void;
   onLogin: () => void;
   onRegister: () => void;
