@@ -10,6 +10,7 @@ export interface AuthUser {
   email: string;
   username: string | null;
   role: UserRole;
+  avatar_url?: string;
 }
 
 // API-06, API-07
@@ -70,10 +71,12 @@ export interface NavHandlers {
   onHome: () => void;
   onDoctors: () => void;
   onSchedule: () => void;
+  onRecords: () => void;   // UC008
   onContact: () => void;
   onLogin: () => void;
   onRegister: () => void;
   onLogout: () => void;
+  onProfile?: () => void; // UC009: mở trang/hộp thoại thông tin cá nhân
 }
 
 // ---------- Sprint 3: lịch hẹn (API-09, API-10, API-22) ----------

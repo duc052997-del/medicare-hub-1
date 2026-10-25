@@ -24,3 +24,6 @@ html { scroll-behavior: smooth; }
   .mh-grid4 { grid-template-columns:1fr !important; }
   .mh-hotline { display:none !important; }
 }
+/*UC009*/
+.mh-menu-item:hover, .mh-menu-item:focus-visible { background:#eaf3ff !important; color:#2563eb !important; outline:none; }
+.mh-menu-item.mh-menu-item--danger:hover, .mh-menu-item.mh-menu-item--danger:focus-visible { background:#fef2f2 !important; color:#b91c1c !important; }
