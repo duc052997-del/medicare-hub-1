@@ -15,30 +15,74 @@ export interface SectionProps {
   onChange: ProfileChange;
 }
 
-// Tên tài khoản, email (bắt buộc)
+// Họ tên, email (bắt buộc) — khớp API-14: full_name + email
 export function AccountSection({ form, errors, disabled, onChange }: SectionProps) {
   return (
     <>
-      <TextField label="Tên tài khoản" required value={form.username} error={errors.username} disabled={disabled}
-        placeholder="Nhập tên tài khoản" onChange={(v) => onChange('username', v)} />
-      <TextField label="Email" required type="email" value={form.email} error={errors.email} disabled={disabled}
-        placeholder="name@example.com" onChange={(v) => onChange('email', v)} />
+      <TextField
+        label="Họ và tên"
+        required
+        value={form.full_name}
+        error={errors.full_name}
+        disabled={disabled}
+        placeholder="Nhập họ và tên"
+        onChange={(v) => onChange('full_name', v)}
+      />
+      <TextField
+        label="Email"
+        required
+        type="email"
+        value={form.email}
+        error={errors.email}
+        disabled={disabled}
+        placeholder="name@example.com"
+        onChange={(v) => onChange('email', v)}
+      />
     </>
   );
 }
 
-// Ngày sinh, giới tính, số điện thoại (không bắt buộc)
+// Ngày sinh, giới tính, số điện thoại, địa chỉ (không bắt buộc)
 export function PersonalSection({ form, errors, disabled, onChange }: SectionProps) {
   return (
     <>
       <div style={s.twoCol}>
-        <TextField label="Ngày sinh" type="date" max={todayVN()} value={form.date_of_birth} error={errors.date_of_birth}
-          disabled={disabled} onChange={(v) => onChange('date_of_birth', v)} />
-        <SelectField label="Giới tính" value={form.gender} error={errors.gender} disabled={disabled}
-          options={GENDER_OPTIONS} emptyLabel="Không chọn" onChange={(v) => onChange('gender', toGender(v))} />
+        <TextField
+          label="Ngày sinh"
+          type="date"
+          max={todayVN()}
+          value={form.date_of_birth}
+          error={errors.date_of_birth}
+          disabled={disabled}
+          onChange={(v) => onChange('date_of_birth', v)}
+        />
+        <SelectField
+          label="Giới tính"
+          value={form.gender}
+          error={errors.gender}
+          disabled={disabled}
+          options={GENDER_OPTIONS}
+          emptyLabel="Không chọn"
+          onChange={(v) => onChange('gender', toGender(v))}
+        />
       </div>
-      <TextField label="Số điện thoại" type="tel" value={form.phone} error={errors.phone} disabled={disabled}
-        placeholder="0912345678" onChange={(v) => onChange('phone', v)} />
+      <TextField
+        label="Số điện thoại"
+        type="tel"
+        value={form.phone}
+        error={errors.phone}
+        disabled={disabled}
+        placeholder="0912345678"
+        onChange={(v) => onChange('phone', v)}
+      />
+      <TextField
+        label="Địa chỉ"
+        value={form.address}
+        error={errors.address}
+        disabled={disabled}
+        placeholder="Số nhà, đường, quận/huyện..."
+        onChange={(v) => onChange('address', v)}
+      />
     </>
   );
 }
@@ -47,16 +91,36 @@ export function PersonalSection({ form, errors, disabled, onChange }: SectionPro
 export function PasswordSection({ form, errors, disabled, onChange }: SectionProps) {
   return (
     <>
-      <PasswordField label="Mật khẩu hiện tại" required value={form.password} error={errors.password} disabled={disabled}
-        autoComplete="current-password" hint="Nhập mật khẩu hiện tại để xác nhận lưu thay đổi."
-        onChange={(v) => onChange('password', v)} />
-      <PasswordField label="Mật khẩu mới" value={form.new_password} error={errors.new_password} disabled={disabled}
-        autoComplete="new-password" placeholder="Để trống nếu không đổi mật khẩu"
+      <PasswordField
+        label="Mật khẩu hiện tại"
+        required
+        value={form.password}
+        error={errors.password}
+        disabled={disabled}
+        autoComplete="current-password"
+        hint="Nhập mật khẩu hiện tại để xác nhận lưu thay đổi."
+        onChange={(v) => onChange('password', v)}
+      />
+      <PasswordField
+        label="Mật khẩu mới"
+        value={form.new_password}
+        error={errors.new_password}
+        disabled={disabled}
+        autoComplete="new-password"
+        placeholder="Để trống nếu không đổi mật khẩu"
         hint={`Không bắt buộc. Chỉ nhập khi muốn đổi mật khẩu (tối thiểu ${PROFILE_LIMITS.passwordMin} ký tự).`}
-        onChange={(v) => onChange('new_password', v)} />
-      <PasswordField label="Nhập lại mật khẩu mới" required={!!form.new_password} value={form.confirm_password}
-        error={errors.confirm_password} disabled={disabled} autoComplete="new-password" placeholder="Nhập lại mật khẩu mới"
-        onChange={(v) => onChange('confirm_password', v)} />
+        onChange={(v) => onChange('new_password', v)}
+      />
+      <PasswordField
+        label="Nhập lại mật khẩu mới"
+        required={!!form.new_password}
+        value={form.confirm_password}
+        error={errors.confirm_password}
+        disabled={disabled}
+        autoComplete="new-password"
+        placeholder="Nhập lại mật khẩu mới"
+        onChange={(v) => onChange('confirm_password', v)}
+      />
     </>
   );
 }

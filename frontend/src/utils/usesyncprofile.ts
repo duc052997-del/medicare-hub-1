@@ -1,7 +1,7 @@
 // utils/usesyncprofile.ts
 // UC009: lấy ảnh đại diện + tên/email mới nhất từ hồ sơ về phiên đăng nhập để Header/menu hiển thị (API-03 /auth/me không trả ảnh).
-// Chạy mỗi khi người dùng đổi (đăng nhập, mở lại trang, lưu hồ sơ); chỉ ghi lại khi ảnh khác để không lặp vô hạn.
-// Lỗi mạng/BE chưa có API hồ sơ thì bỏ qua: Header vẫn hiện chữ cái đầu như cũ.
+// Chạy mỗi khi người dùng đổi (đăng nhập, mở lại trang, lưu hồ sơ); chỉ ghi lại khi ảnh/tên khác để không lặp vô hạn.
+// Lỗi mạng/BE chưa có API hồ sơ / Admin chưa có bản ghi patients (404) thì bỏ qua: Header vẫn hiện chữ cái đầu như cũ.
 import { useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { profileService } from '../services/profileservice';
@@ -15,18 +15,15 @@ export function useSyncProfile(user: AuthUser | null, setUser: Dispatch<SetState
       .getProfile()
       .then((p) => {
         if (cancelled || !p) return;
-        const next = { 
-          username: p.username, 
-          email: p.email, 
-          avatar_url: p.avatar_url ?? undefined // <--- Đổi thành undefined
-        };
         setUser((u) => {
           if (!u || u.id !== user.id) return u;
-          const same = 
-            u.username === next.username && 
-            u.email === next.email && 
-            (u.avatar_url ?? undefined) === next.avatar_url; // <--- Đổi thành undefined
-          return same ? u : { ...u, ...next };
+          const nextUsername = p.full_name ?? u.username;
+          const nextAvatar = p.avatar_url ?? undefined;
+          const same =
+            (u.username ?? null) === (nextUsername ?? null) &&
+            u.email === p.email &&
+            (u.avatar_url ?? undefined) === nextAvatar;
+          return same ? u : { ...u, username: nextUsername, email: p.email, avatar_url: nextAvatar };
         });
       })
       .catch(() => {});

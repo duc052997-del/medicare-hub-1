@@ -42,7 +42,7 @@ export default function ProfileForm({ user, onSaved, onBack }: ProfileFormProps)
 
           <AvatarPicker
             value={form.avatar_url}
-            initial={(form.username.trim() || user.username || user.email).charAt(0).toUpperCase()}
+            initial={(form.full_name.trim() || user.username || user.email).charAt(0).toUpperCase()}
             error={errors.avatar_url}
             disabled={busy}
             onChange={(url) => p.setField('avatar_url', url)}

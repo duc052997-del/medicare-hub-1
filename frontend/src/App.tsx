@@ -99,9 +99,16 @@ export default function App() {
       .getProfile()
       .then((p) => {
         if (cancelled || !p) return;
-        setUser((u) =>
-          u && u.id === user.id && (u.avatar_url ?? undefined) !== (p.avatar_url ?? undefined) ? { ...u, avatar_url: p.avatar_url ?? undefined } : u
-        );
+        setUser((u) => {
+          if (!u || u.id !== user.id) return u;
+          const nextUsername = p.full_name ?? u.username;
+          const nextAvatar = p.avatar_url ?? undefined;
+          const same =
+            (u.username ?? null) === (nextUsername ?? null) &&
+            u.email === p.email &&
+            (u.avatar_url ?? undefined) === nextAvatar;
+          return same ? u : { ...u, username: nextUsername, email: p.email, avatar_url: nextAvatar };
+        });
       })
       .catch(() => {});
     return () => {

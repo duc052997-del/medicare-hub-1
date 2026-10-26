@@ -5,8 +5,14 @@ import { isRealDate, todayVN } from './schedule';
 import type { AuthUser } from '../types';
 import type { Gender, ProfileErrors, ProfileFieldKey, ProfileForm, ProfilePayload, UserProfile } from '../types/profile';
 
-// Giới hạn dữ liệu. Mật khẩu cùng quy tắc với đăng ký (API-01); SĐT theo API-14.
-export const PROFILE_LIMITS = { usernameMax: 50, passwordMin: 8, passwordMaxBytes: 72 } as const;
+// Giới hạn dữ liệu khớp BE (patient.controller.js + API-14)
+export const PROFILE_LIMITS = {
+  fullNameMax: 100,
+  addressMax: 255,
+  passwordMin: 8,
+  passwordMaxBytes: 72,
+  avatarMaxChars: 700_000,
+} as const;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^0\d{9}$/; // 10 số bắt đầu bằng 0
@@ -18,7 +24,7 @@ export const GENDER_OPTIONS: { value: Gender; label: string }[] = [
 ];
 
 export const EMPTY_PROFILE_FORM: ProfileForm = {
-  username: '',
+  full_name: '',
   email: '',
   password: '',
   new_password: '',
@@ -26,6 +32,7 @@ export const EMPTY_PROFILE_FORM: ProfileForm = {
   date_of_birth: '',
   phone: '',
   gender: '',
+  address: '',
   avatar_url: '',
 };
 
@@ -39,17 +46,18 @@ export const toGender = (v: string): Gender | '' => GENDER_OPTIONS.find((g) => g
 // ---------- Đổi qua lại form <-> API ----------
 export const toProfileForm = (p: UserProfile): ProfileForm => ({
   ...EMPTY_PROFILE_FORM, // mật khẩu luôn rỗng khi nạp/làm mới form
-  username: p.username ?? '',
+  full_name: p.full_name ?? '',
   email: p.email ?? '',
   date_of_birth: p.date_of_birth ?? '',
   phone: p.phone ?? '',
   gender: p.gender ?? '',
+  address: p.address ?? '',
   avatar_url: p.avatar_url ?? '',
 });
 
 // Ô không bắt buộc bỏ trống thì gửi null
 export const toProfilePayload = (f: ProfileForm): ProfilePayload => ({
-  username: f.username.trim(),
+  full_name: f.full_name.trim(),
   email: f.email.trim(),
   password: f.password,
   new_password: f.new_password || null,
@@ -57,23 +65,27 @@ export const toProfilePayload = (f: ProfileForm): ProfilePayload => ({
   date_of_birth: f.date_of_birth || null,
   phone: f.phone.replace(/\s/g, '') || null,
   gender: f.gender || null,
+  address: f.address.trim() || null,
 });
 
-// Phần của hồ sơ mà Header/menu cần hiển thị (lưu vào phiên đăng nhập)
+// Phần của hồ sơ mà Header/menu cần hiển thị (lưu vào phiên đăng nhập).
+// AuthUser vẫn dùng username (từ users bảng đăng nhập); map full_name -> username để menu hiện họ tên.
 export const applyProfileToUser = (user: AuthUser, p: UserProfile): AuthUser => ({
   ...user,
   email: p.email,
-  username: p.username,
-  avatar_url: p.avatar_url ?? undefined
+  username: p.full_name ?? user.username,
+  avatar_url: p.avatar_url ?? undefined,
 });
 
 // ---------- Kiểm tra dữ liệu, mỗi nhóm một hàm ----------
 const validateAccount = (f: ProfileForm): ProfileErrors => {
   const errs: ProfileErrors = {};
-  const username = f.username.trim();
+  const fullName = f.full_name.trim();
   const email = f.email.trim();
-  if (!username) errs.username = 'Vui lòng nhập tên tài khoản!';
-  else if (username.length > PROFILE_LIMITS.usernameMax) errs.username = `Tên tài khoản tối đa ${PROFILE_LIMITS.usernameMax} ký tự!`;
+  if (!fullName) errs.full_name = 'Vui lòng nhập họ và tên!';
+  else if (fullName.length > PROFILE_LIMITS.fullNameMax) {
+    errs.full_name = `Họ và tên tối đa ${PROFILE_LIMITS.fullNameMax} ký tự!`;
+  }
   if (!email) errs.email = 'Vui lòng nhập email!';
   else if (!EMAIL_REGEX.test(email)) errs.email = 'Email không hợp lệ!';
   return errs;
@@ -83,9 +95,13 @@ const validateAccount = (f: ProfileForm): ProfileErrors => {
 const validatePersonal = (f: ProfileForm): ProfileErrors => {
   const errs: ProfileErrors = {};
   const phone = f.phone.replace(/\s/g, '');
+  const address = f.address.trim();
   if (phone && !PHONE_REGEX.test(phone)) errs.phone = 'Số điện thoại gồm 10 số, bắt đầu bằng 0!';
   if (f.date_of_birth && (!isRealDate(f.date_of_birth) || f.date_of_birth > todayVN())) {
     errs.date_of_birth = 'Ngày sinh không hợp lệ hoặc ở tương lai!';
+  }
+  if (address.length > PROFILE_LIMITS.addressMax) {
+    errs.address = `Địa chỉ tối đa ${PROFILE_LIMITS.addressMax} ký tự!`;
   }
   return errs;
 };
@@ -95,9 +111,13 @@ const validatePassword = (f: ProfileForm): ProfileErrors => {
   if (!f.password) errs.password = 'Vui lòng nhập mật khẩu hiện tại để xác nhận lưu!';
 
   if (f.new_password) {
-    if (f.new_password.length < PROFILE_LIMITS.passwordMin) errs.new_password = `Mật khẩu mới phải có tối thiểu ${PROFILE_LIMITS.passwordMin} ký tự!`;
-    else if (new TextEncoder().encode(f.new_password).length > PROFILE_LIMITS.passwordMaxBytes) errs.new_password = `Mật khẩu mới quá dài (tối đa ${PROFILE_LIMITS.passwordMaxBytes} byte)!`;
-    else if (f.new_password === f.password) errs.new_password = 'Mật khẩu mới phải khác mật khẩu hiện tại!';
+    if (f.new_password.length < PROFILE_LIMITS.passwordMin) {
+      errs.new_password = `Mật khẩu mới phải có tối thiểu ${PROFILE_LIMITS.passwordMin} ký tự!`;
+    } else if (new TextEncoder().encode(f.new_password).length > PROFILE_LIMITS.passwordMaxBytes) {
+      errs.new_password = `Mật khẩu mới quá dài (tối đa ${PROFILE_LIMITS.passwordMaxBytes} byte)!`;
+    } else if (f.new_password === f.password) {
+      errs.new_password = 'Mật khẩu mới phải khác mật khẩu hiện tại!';
+    }
 
     if (!f.confirm_password) errs.confirm_password = 'Vui lòng nhập lại mật khẩu mới!';
     else if (f.confirm_password !== f.new_password) errs.confirm_password = 'Mật khẩu xác nhận không khớp!';
