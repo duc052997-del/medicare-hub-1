@@ -7,7 +7,7 @@ import type { AuthUser, NavHandlers } from '../types';
 interface HeaderProps {
   user?: AuthUser | null;
   nav: NavHandlers;
-  // Mục menu được tô sáng: 'home' | 'doctors' | 'schedule' | 'contact' | null (không tô)
+  // Mục menu được tô sáng: 'home' | 'doctors' | 'schedule' | 'records' | 'contact' | null (không tô)
   active?: string | null;
 }
 
@@ -19,6 +19,8 @@ export default function Header({ user, nav, active = 'home' }: HeaderProps) {
     { key: 'home', text: 'Trang chủ', onClick: nav.onHome },
     { key: 'doctors', text: 'Bác sĩ', onClick: nav.onDoctors },
     { key: 'schedule', text: 'Lịch khám', onClick: nav.onSchedule },
+    // UC008: chỉ bệnh nhân có hồ sơ bệnh án
+    ...(user?.role !== 'ADMIN' ? [{ key: 'records', text: 'Hồ sơ bệnh án', onClick: nav.onRecords }] : []), // khách chưa đăng nhập vẫn thấy, trang sẽ mời đăng nhập
     { key: 'contact', text: 'Liên hệ', onClick: nav.onContact },
   ];
 

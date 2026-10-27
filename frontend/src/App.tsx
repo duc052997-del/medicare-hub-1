@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Home from './pages/home';
 import DoctorsPage from './pages/doctors';
 import SchedulePage from './pages/schedule';
+import MedicalRecordsPage from './pages/medicalrecords';
 import ContactPage from './pages/contact';
 import Login from './pages/login';
 import Register from './pages/register';
@@ -42,7 +43,7 @@ export default function App() {
   const [booking, setBooking] = useState<{ open: boolean; doctorId: string }>({ open: false, doctorId: '' });
   // Dùng để làm mới trang lịch khám khi đặt lịch thành công
   const [refreshKey, setRefreshKey] = useState(0);
-  
+
   useEffect(() => {
     const onPop = () => setCurrentPath(window.location.pathname);
     window.addEventListener('popstate', onPop);
@@ -100,6 +101,7 @@ export default function App() {
     onHome: () => navigateTo('/'),
     onDoctors: () => navigateTo('/doctors'),
     onSchedule: () => navigateTo('/schedule'),
+    onRecords: () => navigateTo('/records'),
     onContact: () => navigateTo('/contact'),
     onLogin: () => navigateTo('/login'),
     onRegister: () => navigateTo('/register'),
@@ -111,6 +113,7 @@ export default function App() {
       {(currentPath === '/' || currentPath === '/home') && <Home user={user} nav={nav} onBooking={handleBooking} />}
       {currentPath === '/doctors' && <DoctorsPage user={user} nav={nav} onBooking={handleBooking} />}
       {currentPath === '/schedule' && <SchedulePage user={user} nav={nav} onBooking={handleBooking} refreshKey={refreshKey} />}
+      {currentPath === '/records' && <MedicalRecordsPage user={user} nav={nav} />}
       {currentPath === '/contact' && <ContactPage user={user} nav={nav} />}
 
       {currentPath === '/login' && !user && (
