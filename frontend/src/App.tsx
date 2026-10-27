@@ -1,5 +1,5 @@
-// App.tsx — Router thủ công, phiên đăng nhập, khung đặt lịch đè trang, hộp đăng xuất.
-import { useState, useEffect } from 'react';
+// App.tsx — Router thủ công, phiên đăng nhập, khung đặt lịch đè trang, hộp đăng xuất, trang thông tin cá nhân /profile (UC009).
+import { useState, useEffect, useRef } from 'react';
 import Home from './pages/home';
 import DoctorsPage from './pages/doctors';
 import SchedulePage from './pages/schedule';
@@ -7,10 +7,12 @@ import MedicalRecordsPage from './pages/medicalrecords';
 import ContactPage from './pages/contact';
 import Login from './pages/login';
 import Register from './pages/register';
+import ProfilePage from './pages/profile'; // UC009 (THÊM)
 import Logout from './pages/logout';
 import BookingModal from './components/bookingmodal';
 import MockBadge from './components/mockbadge';
 import { authService } from './services/authservice';
+import { profileService } from './services/profileservice'; // UC009 (THÊM)
 import { AUTH_EXPIRED_EVENT, clearSession, getToken } from './services/session';
 import type { AuthUser, NavHandlers } from './types';
 
@@ -39,6 +41,8 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(getInitialUser);
   // Hộp xác nhận đăng xuất đè lên trang đang đứng, không chuyển sang /logout
   const [showLogout, setShowLogout] = useState(false);
+  // UC009 (THÊM): trang trước khi mở /profile, để Lưu/Hủy xong quay lại đúng chỗ đó
+  const profileReturnPath = useRef('/');
   // Khung đặt lịch đè lên trang đang mở (UC006); doctorId có khi bấm "Đặt lịch" ở thẻ bác sĩ
   const [booking, setBooking] = useState<{ open: boolean; doctorId: string }>({ open: false, doctorId: '' });
   // Dùng để làm mới trang lịch khám khi đặt lịch thành công
@@ -54,7 +58,7 @@ export default function App() {
   useEffect(() => {
     if (!getToken()) return;
     let cancelled = false;
-    authService.getMe().then((me) => !cancelled && setUser(me)).catch(() => {});
+    authService.getMe().then((me) => !cancelled && setUser((prev) => ({ ...me, avatar_url: me.avatar_url ?? undefined }))).catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -82,11 +86,41 @@ export default function App() {
     if ((user && (currentPath === '/login' || currentPath === '/register')) || currentPath === '/logout') {
       navigateTo('/');
     }
+    // UC009 (THÊM): trang thông tin cá nhân cần đăng nhập
+    if (!user && currentPath === '/profile') navigateTo('/login');
   }, [user, currentPath]);
+
+  // UC009 (THÊM): sau khi có người dùng, lấy ảnh đại diện (và tên/email mới nhất) để Header hiển thị.
+  // Lỗi mạng/BE chưa có API thì bỏ qua, Header vẫn hiện chữ cái đầu.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    profileService
+      .getProfile()
+      .then((p) => {
+        if (cancelled || !p) return;
+        setUser((u) => {
+          if (!u || u.id !== user.id) return u;
+          const nextUsername = p.full_name ?? u.username;
+          const nextAvatar = p.avatar_url ?? undefined;
+          const same =
+            (u.username ?? null) === (nextUsername ?? null) &&
+            u.email === p.email &&
+            (u.avatar_url ?? undefined) === nextAvatar;
+          return same ? u : { ...u, username: nextUsername, email: p.email, avatar_url: nextAvatar };
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   // Đăng xuất / phiên hết hạn thì đóng khung đặt lịch
   useEffect(() => {
-    if (!user) setBooking({ open: false, doctorId: '' });
+    if (!user) {
+      setBooking({ open: false, doctorId: '' });
+    }
   }, [user]);
 
   // Chưa đăng nhập -> sang trang đăng nhập; đã đăng nhập -> mở khung đặt lịch (chọn sẵn bác sĩ nếu có doctorId)
@@ -106,6 +140,11 @@ export default function App() {
     onLogin: () => navigateTo('/login'),
     onRegister: () => navigateTo('/register'),
     onLogout: () => setShowLogout(true),
+    // UC009 (THÊM): nhớ trang đang đứng rồi mở trang /profile
+    onProfile: () => {
+      if (currentPath !== '/profile') profileReturnPath.current = currentPath;
+      navigateTo('/profile');
+    },
   };
 
   return (
@@ -115,6 +154,15 @@ export default function App() {
       {currentPath === '/schedule' && <SchedulePage user={user} nav={nav} onBooking={handleBooking} refreshKey={refreshKey} />}
       {currentPath === '/records' && <MedicalRecordsPage user={user} nav={nav} />}
       {currentPath === '/contact' && <ContactPage user={user} nav={nav} />}
+      {/* UC009 (THÊM): trang thông tin cá nhân; Lưu/Hủy xong quay lại trang trước đó */}
+      {currentPath === '/profile' && user && (
+        <ProfilePage
+          user={user}
+          nav={nav}
+          onSaved={setUser}
+          onBack={() => navigateTo(profileReturnPath.current === '/profile' ? '/' : profileReturnPath.current)}
+        />
+      )}
 
       {currentPath === '/login' && !user && (
         <Login
