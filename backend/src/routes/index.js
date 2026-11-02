@@ -23,4 +23,6 @@ router.use('/medical-records', medicalRecordRoutes); // [UC008-BE]
 // API-13 GET /api/auth/profile; API-14 PUT /api/auth/profile.
 router.use('/auth', patientRoutes);
 
+router.use('/admin', require('./uc012.routes'));
+router.use('/admin', require('./uc010.routes'));
 module.exports = router;
