@@ -39,7 +39,8 @@ export default function RecordList({ user, onLogin, onSchedule }: RecordListProp
   const { doctorMap, featuredIds } = useDoctorDirectory(isPatient);
 
   const [list, setList] = useState<MedicalRecordSummary[]>([]);
-  const [loading, setLoading] = useState(false);
+  // true từ đầu để tránh nháy empty trước khi API trả về
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
 
@@ -54,6 +55,7 @@ export default function RecordList({ user, onLogin, onSchedule }: RecordListProp
     if (!isPatient) {
       setList([]);
       setError('');
+      setLoading(false);
       return;
     }
     let cancelled = false;

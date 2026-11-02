@@ -6,12 +6,13 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import SafeImage from './safeimage';
 import { appointmentService } from '../services/appointmentservice';
-import { doctorService } from '../services/doctorservice';
 import { ApiError } from '../services/apierror';
 import { formatDate } from '../utils/helpers';
 import { formatDateTimeVN } from '../utils/schedule';
+import { normalize } from '../utils/text';
+import { useDoctorDirectory } from '../utils/usedoctordirectory';
 import { inner } from '../styles/layout';
-import type { Appointment, AppointmentStatus, AuthUser, Doctor } from '../types';
+import type { Appointment, AppointmentStatus, AuthUser } from '../types';
 
 const PAGE_SIZE = 6;
 const MAX_REASON = 255;
@@ -45,10 +46,6 @@ const STATUS_COLOR: Record<AppointmentStatus, { color: string; bg: string }> = {
   CANCELLED: { color: '#475569', bg: '#e2e8f0' },
 };
 
-// Bỏ dấu + chữ thường để gõ "tim mach" vẫn khớp "Tim mạch", "duc" khớp "Đức"
-const normalize = (s: string) =>
-  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'd').toLowerCase();
-
 const Group = ({ label, children }: { label: string; children: ReactNode }) => (
   <div style={styles.inputGroup}>
     <label style={styles.label}>{label}</label>
@@ -68,9 +65,11 @@ interface AppointmentHistoryProps {
 
 export default function AppointmentHistory({ user, onLogin, onBooking, refreshKey = 0 }: AppointmentHistoryProps) {
   const isPatient = user?.role === 'PATIENT';
+  const { doctorMap, featuredIds } = useDoctorDirectory(!!isPatient);
 
   const [list, setList] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(false);
+  // true từ đầu để tránh nháy empty trước khi API trả về
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
 
@@ -78,9 +77,6 @@ export default function AppointmentHistory({ user, onLogin, onBooking, refreshKe
   const [status, setStatus] = useState<AppointmentStatus | ''>('');
   const [date, setDate] = useState('');
   const [visible, setVisible] = useState(PAGE_SIZE);
-
-  const [doctorMap, setDoctorMap] = useState<Record<string, Doctor>>({});
-  const [featuredIds, setFeaturedIds] = useState<Set<string>>(new Set());
 
   // Hủy lịch
   const [cancelTarget, setCancelTarget] = useState<Appointment | null>(null);
@@ -95,6 +91,7 @@ export default function AppointmentHistory({ user, onLogin, onBooking, refreshKe
     if (!isPatient) {
       setList([]);
       setError('');
+      setLoading(false);
       return;
     }
     let cancelled = false;
@@ -113,24 +110,6 @@ export default function AppointmentHistory({ user, onLogin, onBooking, refreshKe
       cancelled = true;
     };
   }, [isPatient, user?.id, refreshKey, retry]);
-
-  // Thông tin giới thiệu bác sĩ (ảnh, mô tả, nổi bật) lấy từ API-07 + API-06, ghép theo id.
-  // Lỗi thì bỏ qua: thẻ vẫn hiện tên + chuyên khoa từ lịch hẹn.
-  useEffect(() => {
-    if (!isPatient) return;
-    let cancelled = false;
-    Promise.all([
-      doctorService.getDoctors().catch(() => [] as Doctor[]),
-      doctorService.getFeatured().catch(() => [] as Doctor[]),
-    ]).then(([all, featured]) => {
-      if (cancelled) return;
-      setDoctorMap(Object.fromEntries([...all, ...featured].map((d) => [String(d.id), d])));
-      setFeaturedIds(new Set(featured.map((d) => String(d.id))));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isPatient, retry]);
 
   // Đổi bộ lọc thì quay về trang đầu
   useEffect(() => setVisible(PAGE_SIZE), [keyword, status, date]);
