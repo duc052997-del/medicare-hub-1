@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Home from './pages/home';
 import DoctorsPage from './pages/doctors';
+import AdminDoctorsPage from './pages/admindoctors'; // UC010
 import SchedulePage from './pages/schedule';
 import MedicalRecordsPage from './pages/medicalrecords';
 import ContactPage from './pages/contact';
@@ -128,7 +129,13 @@ export default function App() {
   return (
     <div>
       {(currentPath === '/' || currentPath === '/home') && <Home user={user} nav={nav} onBooking={handleBooking} />}
-      {currentPath === '/doctors' && <DoctorsPage user={user} nav={nav} onBooking={handleBooking} />}
+      {/* UC010: Admin → quản lý bác sĩ (Sửa/Ngừng/Xóa); khách/bệnh nhân → xem + đặt lịch */}
+      {currentPath === '/doctors' &&
+        (user?.role === 'ADMIN' ? (
+          <AdminDoctorsPage user={user} nav={nav} />
+        ) : (
+          <DoctorsPage user={user} nav={nav} onBooking={handleBooking} />
+        ))}
       {currentPath === '/schedule' && <SchedulePage user={user} nav={nav} onBooking={handleBooking} refreshKey={refreshKey} />}
       {currentPath === '/records' && <MedicalRecordsPage user={user} nav={nav} />}
       {currentPath === '/contact' && <ContactPage user={user} nav={nav} />}
