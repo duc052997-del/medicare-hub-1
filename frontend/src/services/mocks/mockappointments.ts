@@ -4,9 +4,9 @@
 
 import { ApiError } from '../apierror';
 import type { Appointment, AppointmentStatus, BookingPayload, BookingResult, CancelResult } from '../../types';
-import { MOCK_DOCTORS } from './mockdata';
 import { mockCurrentUser } from './mockauth';
 import { getDaySlots } from './mockdoctors';
+import { getCatalogDoctors } from './mockadmindoctors';
 import {
   MockAppointment, addAppointment, findAppointment, isSlotTaken, listByPatient, patientHasSlot, updateAppointment,
 } from './mockstore';
@@ -35,7 +35,7 @@ const requirePatient = () => {
 };
 
 const toPublic = (a: MockAppointment): Appointment => {
-  const d = MOCK_DOCTORS.find((x) => String(x.id) === String(a.doctor_id));
+  const d = getCatalogDoctors().find((x) => String(x.id) === String(a.doctor_id));
   return {
     id: a.id,
     doctor: { id: a.doctor_id, full_name: d?.full_name ?? '', specialty: d?.specialty ?? '' },
@@ -83,7 +83,7 @@ export const mockBook = async (payload: BookingPayload): Promise<BookingResult> 
     throw new ApiError(400, 'Vui lòng đặt lịch trước giờ khám ít nhất 24 giờ', undefined, 'time');
   }
 
-  const doctor = MOCK_DOCTORS.find((d) => String(d.id) === f.doctor_id && d.is_active);
+  const doctor = getCatalogDoctors().find((d) => String(d.id) === f.doctor_id && d.is_active);
   if (!doctor) throw new ApiError(404, 'Không tìm thấy bác sĩ');
 
   const slot = getDaySlots(doctor.id, f.date).find((s) => s.start === f.time);

@@ -83,6 +83,67 @@ const save = (list: AdminDoctor[]) => {
   } catch {
     /* bỏ qua */
   }
+  // Báo phía user (danh sách / đặt lịch) biết kho bác sĩ đã đổi
+  try {
+    window.dispatchEvent(new CustomEvent('mh-doctors-catalog-changed'));
+  } catch {
+    /* non-browser */
+  }
+};
+
+/**
+ * Catalog công khai (UC005/006/007 mock): cùng nguồn với Admin UC010.
+ * Thêm/sửa/ngừng ở Admin → list & lịch phía user đọc qua các hàm này.
+ */
+export const getCatalogDoctors = (): Array<{
+  id: string;
+  full_name: string;
+  specialty: string;
+  avatar_url: string | null;
+  bio: string | null;
+  is_featured: boolean;
+  is_active: boolean;
+}> =>
+  load().map((d) => ({
+    id: String(d.id),
+    full_name: d.full_name,
+    specialty: d.specialty,
+    avatar_url: d.avatar_url,
+    bio: d.bio,
+    is_featured: d.is_featured,
+    is_active: d.is_active,
+  }));
+
+/** Khung giờ trong ngày (đã lọc valid_from / valid_to), chưa trừ slot đã đặt */
+export const getCatalogDaySlots = (
+  doctorId: string | number,
+  dayYmd: string
+): { start: string; end: string }[] => {
+  const doc = load().find((d) => String(d.id) === String(doctorId) && d.is_active);
+  if (!doc) return [];
+  const dayOfWeek = new Date(`${dayYmd}T00:00:00Z`).getUTCDay();
+  const blocks = (doc.schedules ?? []).filter((s) => {
+    if (s.day_of_week !== dayOfWeek) return false;
+    const from = s.valid_from?.trim() || null;
+    const to = s.valid_to?.trim() || null;
+    if (from && dayYmd < from) return false;
+    if (to && dayYmd > to) return false;
+    return true;
+  });
+  const out: { start: string; end: string }[] = [];
+  for (const b of blocks) {
+    const step = b.slot_minutes > 0 ? b.slot_minutes : 30;
+    const startM = toMinutes(b.start_time.slice(0, 5));
+    const endM = toMinutes(b.end_time.slice(0, 5));
+    for (let t = startM; t < endM; t += step) {
+      const hh = String(Math.floor(t / 60)).padStart(2, '0');
+      const mm = String(t % 60).padStart(2, '0');
+      const eh = String(Math.floor((t + step) / 60)).padStart(2, '0');
+      const em = String((t + step) % 60).padStart(2, '0');
+      out.push({ start: `${hh}:${mm}`, end: `${eh}:${em}` });
+    }
+  }
+  return out.sort((a, b) => a.start.localeCompare(b.start));
 };
 
 const requireAdmin = () => {
