@@ -14,8 +14,12 @@ export const PROFILE_LIMITS = {
   avatarMaxChars: 700_000,
 } as const;
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_REGEX = /^0\d{9}$/; // 10 số bắt đầu bằng 0
+/** Dùng chung UC009 profile + UC010 Admin bác sĩ + mock */
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const PHONE_REGEX = /^0\d{9}$/; // 10 số bắt đầu bằng 0
+
+export const isValidEmail = (email: string) => EMAIL_REGEX.test(email.trim());
+export const isValidPhone = (phone: string) => PHONE_REGEX.test(phone.replace(/\s/g, ''));
 
 export const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: 'MALE', label: 'Nam' },

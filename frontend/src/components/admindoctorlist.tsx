@@ -1,4 +1,5 @@
 // components/admindoctorlist.tsx — UC010: danh sách bác sĩ Admin trên trang Bác sĩ.
+// Thẻ giống phía user + email/SĐT; 3 nút cùng 1 hàng: Sửa | Ngừng hoạt động | Xóa.
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import SafeImage from './safeimage';
@@ -7,9 +8,10 @@ import { ApiError } from '../services/apierror';
 import { adminDoctorService } from '../services/admindoctorservice';
 import { adminDoctorStyles as s } from '../styles/admindoctors';
 import type { AdminDoctor } from '../types/admindoctor';
+import { DOCTOR_SPECIALTY_FILTER, SPECIALTY_FILTER_ALL } from '../config/constants';
 
-const ALL = 'Tất cả chuyên khoa';
-const SPECIALTIES = [ALL, 'Nội tổng quát', 'Nhi khoa', 'Da liễu', 'Tim mạch', 'Tai Mũi Họng', 'Sản phụ khoa'];
+const ALL = SPECIALTY_FILTER_ALL;
+const SPECIALTIES = DOCTOR_SPECIALTY_FILTER;
 
 const Group = ({ label, children }: { label: string; children: ReactNode }) => (
   <div style={s.inputGroup}>
@@ -247,7 +249,7 @@ export default function AdminDoctorList({ isAdmin }: Props) {
               checked={includeInactive}
               onChange={(e) => setIncludeInactive(e.target.checked)}
             />
-            Hiện cả bác sĩ đã ngừng hoạt động
+            Hiện bác sĩ đã ngừng hoạt động
           </label>
 
           {hasFilter && (

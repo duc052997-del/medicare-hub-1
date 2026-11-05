@@ -11,9 +11,10 @@ import { buildShifts } from '../utils/schedule';
 import { formatDate } from '../utils/helpers';
 import { inner, layoutStyles } from '../styles/layout';
 import type { AuthUser, Doctor, NavHandlers, Slot } from '../types';
+import { DOCTOR_SPECIALTY_FILTER, SPECIALTY_FILTER_ALL } from '../config/constants';
 
-const ALL = 'Tất cả chuyên khoa';
-const SPECIALTIES = [ALL, 'Nội tổng quát', 'Nhi khoa', 'Da liễu', 'Tim mạch', 'Tai Mũi Họng', 'Sản phụ khoa'];
+const ALL = SPECIALTY_FILTER_ALL;
+const SPECIALTIES = DOCTOR_SPECIALTY_FILTER;
 
 // ApiError dùng err.status (status 0 = không kết nối được máy chủ)
 const loadError = (err: unknown) => {

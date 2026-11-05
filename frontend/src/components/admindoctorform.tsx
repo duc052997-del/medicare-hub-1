@@ -6,16 +6,15 @@ import { ApiError } from '../services/apierror';
 import { adminDoctorService } from '../services/admindoctorservice';
 import { adminDoctorStyles as s } from '../styles/admindoctors';
 import type { AdminDoctor, AdminDoctorPayload, DoctorSchedule } from '../types/admindoctor';
+import { DOCTOR_SPECIALTIES } from '../config/constants';
+import { isValidEmail, isValidPhone } from '../utils/profileform';
+import { toMinutes, WEEKDAY_LABELS, WEEKDAY_ORDER_MON_FIRST, weekdaySortKey } from '../utils/schedule';
 
-const DAY_LABEL = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-/** Thứ hiển thị / sắp xếp: T2 → … → T7 → CN */
-const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
-const daySortKey = (d: number) => (d === 0 ? 7 : d);
-
-const SPECIALTIES = ['Nội tổng quát', 'Nhi khoa', 'Da liễu', 'Tim mạch', 'Tai Mũi Họng', 'Sản phụ khoa'];
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_RE = /^0\d{9}$/;
+// Tái sử dụng constants / utils chung (không nhân bản SPECIALTIES, regex, nhãn thứ)
+const SPECIALTIES = DOCTOR_SPECIALTIES;
+const DAY_LABEL = WEEKDAY_LABELS;
+const DAY_ORDER = [...WEEKDAY_ORDER_MON_FIRST];
+const daySortKey = weekdaySortKey;
 
 const Req = () => <span style={s.reqStar}>*</span>;
 
@@ -286,11 +285,11 @@ export default function AdminDoctorForm({ doctorId, onClose, onSaved }: DoctorFo
     if (!name) e.full_name = 'Vui lòng nhập họ tên.';
     if (!form.specialty.trim()) e.specialty = 'Vui lòng chọn chuyên khoa.';
     if (!email) e.email = 'Vui lòng nhập email.';
-    else if (!EMAIL_RE.test(email)) e.email = 'Email không hợp lệ (vd: ten@domain.com).';
+    else if (!isValidEmail(email)) e.email = 'Email không hợp lệ (vd: ten@domain.com).';
     if (!phone) e.phone = 'Vui lòng nhập số điện thoại.';
-    else if (!PHONE_RE.test(phone)) e.phone = 'Số điện thoại gồm 10 số, bắt đầu bằng 0.';
+    else if (!isValidPhone(phone)) e.phone = 'Số điện thoại gồm 10 số, bắt đầu bằng 0.';
 
-    const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+    const mins = toMinutes;
     const minFromOf = (pi: number) => {
       if (pi <= 0) return '';
       const prevTo = list[pi - 1]?.valid_to?.trim();

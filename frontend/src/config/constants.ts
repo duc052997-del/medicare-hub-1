@@ -9,3 +9,9 @@ export const DEPT_SCHEDULE = [
   { dept: 'Tai Mũi Họng', days: 'Thứ 2 - Thứ 6', time: '08:00 - 16:30' },
   { dept: 'Sản phụ khoa', days: 'Thứ 3, Thứ 5, Thứ 7', time: '07:30 - 15:30' },
 ];
+/** Danh sách chuyên khoa (form Admin UC010, lọc trang Bác sĩ…) — lấy từ DEPT_SCHEDULE */
+export const DOCTOR_SPECIALTIES = DEPT_SCHEDULE.map((d) => d.dept);
+
+/** Mục lọc “Tất cả chuyên khoa” + danh sách (trang Bác sĩ / Admin list) */
+export const SPECIALTY_FILTER_ALL = 'Tất cả chuyên khoa';
+export const DOCTOR_SPECIALTY_FILTER = [SPECIALTY_FILTER_ALL, ...DOCTOR_SPECIALTIES];

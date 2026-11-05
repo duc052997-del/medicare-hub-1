@@ -7,6 +7,8 @@ import { MOCK_DOCTORS, MOCK_SCHEDULES } from './mockdata';
 import { loadAppointments } from './mockstore';
 import { delay, flag } from './mockutils';
 import { mockCurrentUser } from './mockauth';
+import { EMAIL_REGEX, PHONE_REGEX } from '../../utils/profileform';
+import { toMinutes } from '../../utils/schedule';
 
 const KEY = 'mock_admin_doctors';
 const FORBIDDEN = 'Bạn không có quyền truy cập chức năng này';
@@ -90,18 +92,16 @@ const requireAdmin = () => {
   return user;
 };
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_RE = /^0\d{9}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+const mins = toMinutes;
 
 const validate = (b: AdminDoctorPayload): string | null => {
   if (!b || typeof b !== 'object' || Array.isArray(b)) return 'body';
   for (const k of ['full_name', 'specialty', 'email', 'phone'] as const) {
     if (typeof b[k] !== 'string' || !b[k].trim()) return k;
   }
-  if (!EMAIL_RE.test(b.email.trim())) return 'email';
-  if (!PHONE_RE.test(b.phone.trim())) return 'phone';
+  if (!EMAIL_REGEX.test(b.email.trim())) return 'email';
+  if (!PHONE_REGEX.test(b.phone.trim())) return 'phone';
   if (b.is_featured !== undefined && typeof b.is_featured !== 'boolean') return 'is_featured';
   if (b.avatar_url != null && typeof b.avatar_url !== 'string') return 'avatar_url';
   if (b.bio != null && typeof b.bio !== 'string') return 'bio';
