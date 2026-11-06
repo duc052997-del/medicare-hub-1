@@ -5,7 +5,7 @@ import { getAsset, getRoleLabel } from '../utils/helpers';
 import { layoutStyles as s } from '../styles/layout';
 import type { AuthUser, NavHandlers } from '../types';
 
-export type HeaderTab = 'home' | 'doctors' | 'schedule' | 'records' | 'contact';
+export type HeaderTab = 'home' | 'doctors' | 'patients' | 'schedule' | 'records' | 'contact'; // UC012
 
 interface HeaderProps {
   user?: AuthUser | null;
@@ -21,6 +21,7 @@ export default function Header({ user, nav, active = 'home' }: HeaderProps) {
   const tabs: { key: HeaderTab; text: string; onClick: () => void; show: boolean }[] = [
     { key: 'home', text: 'Trang chủ', onClick: nav.onHome, show: true },
     { key: 'doctors', text: 'Bác sĩ', onClick: nav.onDoctors, show: true },
+    { key: 'patients', text: 'Bệnh nhân', onClick: () => nav.onPatients?.(), show: user?.role === 'ADMIN' && !!nav.onPatients }, // UC012
     { key: 'schedule', text: 'Lịch khám', onClick: nav.onSchedule, show: true },
     // UC008: chỉ bệnh nhân có hồ sơ bệnh án (hoặc không phải ADMIN tùy logic dự án)
     { key: 'records', text: 'Hồ sơ bệnh án', onClick: nav.onRecords, show: user?.role !== 'ADMIN' },

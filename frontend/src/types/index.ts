@@ -77,6 +77,7 @@ export interface NavHandlers {
   onRegister: () => void;
   onLogout: () => void;
   onProfile?: () => void; // UC009: mở trang/hộp thoại thông tin cá nhân
+  onPatients?: () => void; // UC012: trang Bệnh nhân (chỉ Admin)
 }
 
 // ---------- Sprint 3: lịch hẹn (API-09, API-10, API-22) ----------

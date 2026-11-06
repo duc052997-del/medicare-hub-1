@@ -14,6 +14,7 @@ import type { MedicalRecord, MedicalRecordSummary, PrescriptionItem } from '../.
 import { MOCK_DOCTORS, SEED_USERS } from './mockdata';
 import { mockCurrentUser } from './mockauth';
 import { delay, flag } from './mockutils';
+import { loadCreatedRecords } from './mockrecordstore'; // UC011 Admin: hồ sơ tạo khi hoàn tất lịch (THÊM)
 
 const FORBIDDEN = 'Bạn không có quyền truy cập chức năng này';
 const SERVER_ERROR = 'Đã có lỗi xảy ra, vui lòng thử lại sau';
@@ -99,6 +100,13 @@ const ROWS: Row[] = [
     ]),
 ];
 
+// UC011 (THÊM): hồ sơ do Admin tạo khi hoàn tất lịch (API-27) cũng là dữ liệu của bệnh nhân -> gộp vào cùng kho
+const allRows = (): Row[] => [...ROWS, ...loadCreatedRecords()];
+
+// UC011 Admin (THÊM): hồ sơ của 1 lịch hẹn (API-30), gồm cả hồ sơ mẫu lẫn hồ sơ do Admin vừa tạo
+export const mockFindRecordByAppointment = (appointmentId: string): MedicalRecord | undefined =>
+  allRows().find((r) => r.record.appointment_id === appointmentId)?.record;
+
 // verifyToken + requireRole('PATIENT') của BE: 401 nếu chưa đăng nhập/token sai, 403 nếu không phải bệnh nhân
 const requirePatient = () => {
   if (flag('mock_error_500')) throw new ApiError(500, SERVER_ERROR);
@@ -116,7 +124,7 @@ const toSummary = ({ id, appointment_id, appointment_date, doctor, diagnosis }: 
 export const mockGetMyRecords = async (): Promise<MedicalRecordSummary[]> => {
   await delay(150, 400);
   const user = requirePatient();
-  return ROWS.filter((r) => r.patient_id === user.id)
+  return allRows().filter((r) => r.patient_id === user.id)
     .map((r) => r.record)
     .sort((a, b) => b.appointment_date.localeCompare(a.appointment_date))
     .map(toSummary);
@@ -127,7 +135,16 @@ export const mockGetMyRecords = async (): Promise<MedicalRecordSummary[]> => {
 export const mockGetRecord = async (id: string): Promise<MedicalRecord> => {
   await delay(150, 400);
   const user = requirePatient();
-  const found = ROWS.find((r) => r.record.id === id);
+  const found = allRows().find((r) => r.record.id === id);
   if (!found || found.patient_id !== user.id) throw new ApiError(404, NOT_FOUND);
   return found.record;
 };
+
+// ----- UC012 (THÊM ở cuối file — merge: chỉ thêm block này, không đụng khối UC011 phía trên) -----
+/** Admin API-29: hồ sơ tóm tắt theo patient_id (mẫu + hồ sơ Admin hoàn tất lịch). */
+export const listRecordsByPatient = (patientId: string): MedicalRecordSummary[] =>
+  allRows()
+    .filter((r) => r.patient_id === patientId)
+    .map((r) => r.record)
+    .sort((a, b) => b.appointment_date.localeCompare(a.appointment_date))
+    .map(toSummary);
