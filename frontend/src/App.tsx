@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Home from './pages/home';
 import DoctorsPage from './pages/doctors';
+import AdminDoctorsPage from './pages/admindoctors'; // UC010
 import SchedulePage from './pages/schedule';
 import MedicalRecordsPage from './pages/medicalrecords';
 import ContactPage from './pages/contact';
@@ -12,8 +13,8 @@ import Logout from './pages/logout';
 import BookingModal from './components/bookingmodal';
 import MockBadge from './components/mockbadge';
 import { authService } from './services/authservice';
-import { profileService } from './services/profileservice'; // UC009 (THÊM)
 import { AUTH_EXPIRED_EVENT, clearSession, getToken } from './services/session';
+import { useSyncProfile } from './utils/usesyncprofile'; // UC009 (THÊM): thay effect profileService.getProfile trong App
 import type { AuthUser, NavHandlers } from './types';
 
 const getStoredUser = (): AuthUser | null => {
@@ -58,7 +59,7 @@ export default function App() {
   useEffect(() => {
     if (!getToken()) return;
     let cancelled = false;
-    authService.getMe().then((me) => !cancelled && setUser((prev) => ({ ...me, avatar_url: me.avatar_url ?? undefined }))).catch(() => {});
+    authService.getMe().then((me) => !cancelled && setUser(() => ({ ...me, avatar_url: me.avatar_url ?? undefined }))).catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -92,29 +93,7 @@ export default function App() {
 
   // UC009 (THÊM): sau khi có người dùng, lấy ảnh đại diện (và tên/email mới nhất) để Header hiển thị.
   // Lỗi mạng/BE chưa có API thì bỏ qua, Header vẫn hiện chữ cái đầu.
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    profileService
-      .getProfile()
-      .then((p) => {
-        if (cancelled || !p) return;
-        setUser((u) => {
-          if (!u || u.id !== user.id) return u;
-          const nextUsername = p.full_name ?? u.username;
-          const nextAvatar = p.avatar_url ?? undefined;
-          const same =
-            (u.username ?? null) === (nextUsername ?? null) &&
-            u.email === p.email &&
-            (u.avatar_url ?? undefined) === nextAvatar;
-          return same ? u : { ...u, username: nextUsername, email: p.email, avatar_url: nextAvatar };
-        });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
+  useSyncProfile(user, setUser);
 
   // Đăng xuất / phiên hết hạn thì đóng khung đặt lịch
   useEffect(() => {
@@ -150,7 +129,13 @@ export default function App() {
   return (
     <div>
       {(currentPath === '/' || currentPath === '/home') && <Home user={user} nav={nav} onBooking={handleBooking} />}
-      {currentPath === '/doctors' && <DoctorsPage user={user} nav={nav} onBooking={handleBooking} />}
+      {/* UC010: Admin → quản lý bác sĩ (Sửa/Ngừng/Xóa); khách/bệnh nhân → xem + đặt lịch */}
+      {currentPath === '/doctors' &&
+        (user?.role === 'ADMIN' ? (
+          <AdminDoctorsPage user={user} nav={nav} />
+        ) : (
+          <DoctorsPage user={user} nav={nav} onBooking={handleBooking} />
+        ))}
       {currentPath === '/schedule' && <SchedulePage user={user} nav={nav} onBooking={handleBooking} refreshKey={refreshKey} />}
       {currentPath === '/records' && <MedicalRecordsPage user={user} nav={nav} />}
       {currentPath === '/contact' && <ContactPage user={user} nav={nav} />}

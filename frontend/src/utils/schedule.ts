@@ -9,6 +9,15 @@ export const toMinutes = (t: string) => {
   return h * 60 + m;
 };
 
+/** Nhãn thứ: index 0=CN … 6=T7 (khớp day_of_week backend / UC010) */
+export const WEEKDAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'] as const;
+
+/** Thứ tự hiển thị / sắp xếp: T2 → … → T7 → CN */
+export const WEEKDAY_ORDER_MON_FIRST = [1, 2, 3, 4, 5, 6, 0] as const;
+
+/** Key sắp xếp: T2=1 … T7=6, CN=7 */
+export const weekdaySortKey = (dayOfWeek: number) => (dayOfWeek === 0 ? 7 : dayOfWeek);
+
 export const toTime = (total: number) =>
   `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 

@@ -66,6 +66,15 @@ const buildSeed = (): MockAppointment[] => [
     { created_at: new Date().toISOString() }),
   seedRow(5, 'patient1@medicare.test', 'BS. Bùi Anh Tuấn', nextWeekday(8), '15:00', '15:30', 'Hồi hộp, khó thở khi leo cầu thang', 'CANCELLED',
     { cancel_reason: 'Bận việc đột xuất', cancelled_at: new Date().toISOString(), created_at: new Date().toISOString() }),
+  // Khớp appointment_id 910–913 trong mockrecords (hồ sơ bệnh án mẫu)
+  seedRow(10, 'patient1@medicare.test', 'BS. Phạm Minh Đức', '2026-08-14', '09:00', '09:30', 'Khám huyết áp định kỳ', 'COMPLETED',
+    { created_at: '2026-08-14T02:00:00Z' }),
+  seedRow(11, 'patient1@medicare.test', 'BS. Đặng Mai Lan', '2026-07-02', '10:00', '10:30', 'Sốt, mệt', 'COMPLETED',
+    { created_at: '2026-07-02T01:30:00Z' }),
+  seedRow(12, 'patient1@medicare.test', 'BS. Bùi Anh Tuấn', '2026-06-10', '08:30', '09:00', 'Khám tim mạch định kỳ', 'COMPLETED',
+    { created_at: '2026-06-10T07:00:00Z' }),
+  seedRow(13, 'patient2@medicare.test', 'BS. Hoàng Thu Hà', '2026-09-15', '11:00', '11:30', 'Đau họng, ho', 'COMPLETED',
+    { created_at: '2026-09-15T02:30:00Z' }),
 ];
 
 let memory: MockAppointment[] | null = null; // dự phòng khi localStorage không dùng được
