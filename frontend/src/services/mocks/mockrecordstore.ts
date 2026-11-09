@@ -1,17 +1,17 @@
 // services/mocks/mockrecordstore.ts
-// UC011: "bảng medical_records" do Admin tạo khi hoàn tất lịch (API-27).
-// Lưu localStorage (mock_created_records) để F5 không mất; reset mock_* thì xóa được.
-// mockrecords.ts đọc kho này (allRows) — UC008 bệnh nhân + UC012 Admin xem bệnh nhân.
+// "Bảng medical_records" do Admin tạo khi hoàn tất lịch (API-27). Lưu localStorage (khóa mock_created_records)
+// để F5 không mất; nút MOCK MODE xóa mọi khóa bắt đầu bằng mock_ nên reset được.
+// mockrecords.ts (UC008, bệnh nhân) đọc kho này để hồ sơ mới hiện ngay bên phía bệnh nhân.
 
 import type { MedicalRecord } from '../../types/medical';
 
 export interface CreatedRecordRow {
-  patient_id: string;
+  patient_id: string; // mock không tách bảng patients nên dùng luôn users.id
   record: MedicalRecord;
 }
 
 const KEY = 'mock_created_records';
-let memory: CreatedRecordRow[] = [];
+let memory: CreatedRecordRow[] = []; // dự phòng khi localStorage không dùng được
 
 export const loadCreatedRecords = (): CreatedRecordRow[] => {
   try {
@@ -27,10 +27,10 @@ export const addCreatedRecord = (row: CreatedRecordRow) => {
   try {
     localStorage.setItem(KEY, JSON.stringify(memory));
   } catch {
-    /* đã có memory */
+    /* bỏ qua, đã có bản trong bộ nhớ */
   }
 };
 
-/** Unique(appointment_id): 1 lịch tối đa 1 hồ sơ */
+// Giống unique(appointment_id) của bảng medical_records: 1 lịch tối đa 1 hồ sơ
 export const hasRecordForAppointment = (appointmentId: string) =>
   loadCreatedRecords().some((r) => r.record.appointment_id === appointmentId);
