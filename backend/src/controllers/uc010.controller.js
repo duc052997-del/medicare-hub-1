@@ -71,3 +71,16 @@ exports.remove=async(req,res)=>{
     return success(res,200,'Xóa bác sĩ thành công');
   }catch(e){return dbError(res,e);}
 };
+exports.reactivate=async(req,res)=>{
+  if(!UUID_REGEX.test(req.params.id)) return missing(res);
+  try {
+    // Chỉ bật lại bác sĩ đang ngừng hoạt động; điều kiện is_active=false giữ thao tác idempotent-safe.
+    const {data,error}=await db.from('doctors').update({is_active:true}).eq('id',req.params.id).eq('is_active',false).select(fields).maybeSingle();
+    if(error) throw error;
+    if(data) return success(res,200,'Đã kích hoạt lại bác sĩ',{doctor:data});
+    const {data:cur,error:e2}=await db.from('doctors').select('id').eq('id',req.params.id).maybeSingle();
+    if(e2) throw e2;
+    if(!cur) return missing(res);
+    return fail(res,409,'Bác sĩ đang hoạt động',{code:'ALREADY_ACTIVE'});
+  }catch(e){return serverError(res,'UC010.reactivate',e);}
+};

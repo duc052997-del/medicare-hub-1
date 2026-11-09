@@ -21,6 +21,15 @@ test('soft delete RPC success',async()=>{db.rpc.mockResolvedValue({error:null});
 test('inactive excluded by default',async()=>{await c.list({query:{}},res);expect(q.eq).toHaveBeenCalledWith('is_active',true);});
 test('include inactive',async()=>{await c.list({query:{include_inactive:'true'}},res);expect(q.eq).not.toHaveBeenCalled();});
 
+describe('reactivate',()=>{
+ beforeEach(()=>{q.update=jest.fn().mockReturnValue(q);});
+ test('invalid UUID 404 no DB',async()=>{await c.reactivate({params:{id:'bad'}},res);expect(res.status).toHaveBeenCalledWith(404);expect(db.from).not.toHaveBeenCalled();});
+ test('success 200 sets is_active true only for inactive',async()=>{q.maybeSingle.mockResolvedValueOnce({data:{id,is_active:true},error:null});await c.reactivate({params:{id}},res);expect(q.update).toHaveBeenCalledWith({is_active:true});expect(q.eq).toHaveBeenCalledWith('is_active',false);expect(res.status).toHaveBeenCalledWith(200);expect(res.json.mock.calls[0][0].doctor.id).toBe(id);});
+ test('not found 404',async()=>{q.maybeSingle.mockResolvedValue({data:null,error:null});await c.reactivate({params:{id}},res);expect(res.status).toHaveBeenCalledWith(404);});
+ test('already active 409',async()=>{q.maybeSingle.mockResolvedValueOnce({data:null,error:null}).mockResolvedValueOnce({data:{id},error:null});await c.reactivate({params:{id}},res);expect(res.status).toHaveBeenCalledWith(409);});
+ test('db error sanitized 500',async()=>{const log=jest.spyOn(console,'error').mockImplementation(()=>{});q.maybeSingle.mockResolvedValue({data:null,error:{message:'secret'}});await c.reactivate({params:{id}},res);expect(res.status).toHaveBeenCalledWith(500);expect(JSON.stringify(res.json.mock.calls)).not.toContain('secret');log.mockRestore();});
+});
+
 describe('HTTP authorization with real JWT middleware',()=>{
  let server,url;
  beforeAll(async()=>{process.env.JWT_SECRET='ci-test-only-secret';jest.resetModules();const express=require('express');const app=express();app.use(express.json());app.use('/api/admin',require('../src/routes/uc010.routes'));server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});url='http://127.0.0.1:'+server.address().port+'/api/admin/doctors';});
