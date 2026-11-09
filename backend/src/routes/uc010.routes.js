@@ -7,4 +7,5 @@ router.get('/doctors/:id', c.detail);
 router.post('/doctors', c.save);
 router.put('/doctors/:id', c.save);
 router.delete('/doctors/:id', c.remove);
+router.post('/doctors/:id/reactivate', c.reactivate);
 module.exports = router;
