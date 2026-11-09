@@ -139,3 +139,12 @@ export const mockGetRecord = async (id: string): Promise<MedicalRecord> => {
   if (!found || found.patient_id !== user.id) throw new ApiError(404, NOT_FOUND);
   return found.record;
 };
+
+// ----- UC012 (THÊM ở cuối file — merge: chỉ thêm block này, không đụng khối UC011 phía trên) -----
+/** Admin API-29: hồ sơ tóm tắt theo patient_id (mẫu + hồ sơ Admin hoàn tất lịch). */
+export const listRecordsByPatient = (patientId: string): MedicalRecordSummary[] =>
+  allRows()
+    .filter((r) => r.patient_id === patientId)
+    .map((r) => r.record)
+    .sort((a, b) => b.appointment_date.localeCompare(a.appointment_date))
+    .map(toSummary);

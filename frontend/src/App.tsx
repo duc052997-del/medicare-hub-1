@@ -9,6 +9,7 @@ import ContactPage from './pages/contact';
 import Login from './pages/login';
 import Register from './pages/register';
 import ProfilePage from './pages/profile'; // UC009 (THÊM)
+import PatientsPage from './pages/patients'; // UC012
 import Logout from './pages/logout';
 import BookingModal from './components/bookingmodal';
 import MockBadge from './components/mockbadge';
@@ -89,6 +90,8 @@ export default function App() {
     }
     // UC009 (THÊM): trang thông tin cá nhân cần đăng nhập
     if (!user && currentPath === '/profile') navigateTo('/login');
+    // UC012: trang Bệnh nhân chỉ Admin
+    if (currentPath === '/patients' && user?.role !== 'ADMIN') navigateTo(user ? '/' : '/login');
   }, [user, currentPath]);
 
   // UC009 (THÊM): sau khi có người dùng, lấy ảnh đại diện (và tên/email mới nhất) để Header hiển thị.
@@ -113,6 +116,7 @@ export default function App() {
   const nav: NavHandlers = {
     onHome: () => navigateTo('/'),
     onDoctors: () => navigateTo('/doctors'),
+    onPatients: () => navigateTo('/patients'), // UC012
     onSchedule: () => navigateTo('/schedule'),
     onRecords: () => navigateTo('/records'),
     onContact: () => navigateTo('/contact'),
@@ -136,6 +140,7 @@ export default function App() {
         ) : (
           <DoctorsPage user={user} nav={nav} onBooking={handleBooking} />
         ))}
+      {currentPath === '/patients' && user?.role === 'ADMIN' && <PatientsPage user={user} nav={nav} />}
       {currentPath === '/schedule' && <SchedulePage user={user} nav={nav} onBooking={handleBooking} refreshKey={refreshKey} />}
       {currentPath === '/records' && <MedicalRecordsPage user={user} nav={nav} />}
       {currentPath === '/contact' && <ContactPage user={user} nav={nav} />}
