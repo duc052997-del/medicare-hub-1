@@ -1,16 +1,17 @@
 // services/mocks/mockappointments.ts
-// Giả lập API-09 (đặt lịch), API-10 (lịch sử của tôi), API-22 (hủy lịch): đúng thứ tự kiểm tra,
+// Giả lập API-09 (đặt lịch), API-10 (lịch sử của tôi), API-20 (chi tiết), API-21 (đổi lịch), API-22 (hủy lịch): đúng thứ tự kiểm tra,
 // mã lỗi và thông báo trong hợp đồng. Chống trùng giờ theo unique index của schema.sql (xem mockstore.ts).
-
 import { ApiError } from '../apierror';
 import type { Appointment, AppointmentStatus, BookingPayload, BookingResult, CancelResult } from '../../types';
+import { getCatalogDoctors } from './mockadmindoctors';
 import { mockCurrentUser } from './mockauth';
 import { getDaySlots } from './mockdoctors';
-import { getCatalogDoctors } from './mockadmindoctors';
 import {
   MockAppointment, addAppointment, findAppointment, isSlotTaken, listByPatient, patientHasSlot, updateAppointment,
 } from './mockstore';
 import { delay, flag } from './mockutils';
+import type { AppointmentDetail, ReschedulePayload, RescheduleResult } from '../../types/appointmentdetail';
+import { canCancelAppointment, canRescheduleAppointment } from '../../utils/appointmentrules';
 import {
   isRealDate, isSlotBookable, maxBookingDate, timeNowVN, todayVN,
 } from '../../utils/schedule';
@@ -152,7 +153,7 @@ export const mockCancel = async (id: string, reason?: string): Promise<CancelRes
   
   // Chỉ cho phép hủy khi lịch hẹn đang ở trạng thái PENDING (chưa xác nhận)
   if (found.status !== 'PENDING') {
-    throw new ApiError(400, 'Chỉ có thể hủy lịch hẹn khi chưa xác nhận', 'CANNOT_CANCEL');
+    throw new ApiError(400, 'Chỉ có thể hủy lịch hẹn khi chưa xác nhận', 'CANCEL_NOT_ALLOWED');
   }
 
   const updated = updateAppointment(id, {
@@ -162,4 +163,59 @@ export const mockCancel = async (id: string, reason?: string): Promise<CancelRes
   });
 
   return { message: 'Hủy lịch hẹn thành công', appointment: toPublic(updated!) };
+};
+
+// ================= API-20  GET /appointments/:id =================
+// Lịch của người khác cũng trả 404 để không lộ sự tồn tại. can_cancel / can_reschedule tính theo utils/appointmentrules.ts.
+export const mockGetDetail = async (id: string): Promise<AppointmentDetail> => {
+  await delay(150, 400);
+  maybeFail();
+  const user = requirePatient();
+
+  const found = findAppointment(id);
+  if (!found || found.patient_id !== user.id) throw new ApiError(404, 'Không tìm thấy lịch hẹn');
+  return { ...toPublic(found), can_cancel: canCancelAppointment(found), can_reschedule: canRescheduleAppointment(found) };
+};
+
+// ================= API-21  PATCH /appointments/:id/reschedule =================
+// Giữ nguyên bác sĩ và trạng thái, chỉ đổi ngày/giờ. Khung giờ mới phải theo cùng luật đặt lịch UC006 (30 ngày, trước 24 giờ),
+// nằm trong lịch làm việc, chưa ai đặt (unique index, bỏ qua chính lịch này vì giờ cũ khác giờ mới).
+export const mockReschedule = async (id: string, payload: ReschedulePayload): Promise<RescheduleResult> => {
+  await delay();
+  maybeFail();
+  const user = requirePatient();
+
+  const date = text(payload?.date);
+  const time = text(payload?.time);
+  if (!date || !time || !isRealDate(date) || !TIME_REGEX.test(time)) throw new ApiError(400, 'Ngày giờ không hợp lệ');
+
+  const found = findAppointment(id);
+  if (!found || found.patient_id !== user.id) throw new ApiError(404, 'Không tìm thấy lịch hẹn');
+  if (!canRescheduleAppointment(found)) throw new ApiError(400, 'Lịch hẹn không thể đổi', 'RESCHEDULE_NOT_ALLOWED');
+
+  if (date < todayVN() || (date === todayVN() && time <= timeNowVN())) {
+    throw new ApiError(400, 'Không thể đặt lịch trong quá khứ');
+  }
+  if (date > maxBookingDate()) {
+    throw new ApiError(400, 'Chỉ được đặt lịch trong vòng 30 ngày kể từ ngày mai', undefined, 'date');
+  }
+  if (!isSlotBookable(date, time)) {
+    throw new ApiError(400, 'Vui lòng đặt lịch trước giờ khám ít nhất 24 giờ', undefined, 'time');
+  }
+  if (date === found.appointment_date && time === found.start_time) {
+    throw new ApiError(400, 'Vui lòng chọn khung giờ khác với lịch hiện tại', undefined, 'time');
+  }
+
+  const slot = getDaySlots(found.doctor_id, date).find((s) => s.start === time);
+  if (!slot) throw new ApiError(400, 'Khung giờ này bác sĩ không làm việc', 'SLOT_NOT_IN_SCHEDULE');
+
+  if (isSlotTaken(found.doctor_id, date, time)) {
+    throw new ApiError(409, 'Khung giờ không khả dụng, vui lòng chọn lại', 'SLOT_TAKEN');
+  }
+  if (patientHasSlot(user.id, date, time)) {
+    throw new ApiError(409, 'Bạn đã có lịch khám khác vào khung giờ này, vui lòng chọn khung giờ khác', 'SLOT_TAKEN');
+  }
+
+  const updated = updateAppointment(id, { appointment_date: date, start_time: slot.start, end_time: slot.end });
+  return { message: 'Đổi lịch hẹn thành công', appointment: toPublic(updated!) };
 };

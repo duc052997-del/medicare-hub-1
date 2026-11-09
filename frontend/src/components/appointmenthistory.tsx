@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import SafeImage from './safeimage';
+import AppointmentDetailDialog from './appointmentdetail'; // UC011: chi tiết / đổi lịch / hủy (THÊM)
 import { appointmentService } from '../services/appointmentservice';
 import { ApiError } from '../services/apierror';
 import { formatDate } from '../utils/helpers';
@@ -13,13 +14,12 @@ import { normalize } from '../utils/text';
 import { useDoctorDirectory } from '../utils/usedoctordirectory';
 import { inner } from '../styles/layout';
 import type { Appointment, AppointmentStatus, AuthUser } from '../types';
+import { STATUS_COLOR, STATUS_LABEL, STATUS_ORDER } from '../utils/appointmentstatus';
 
 const PAGE_SIZE = 6;
 const MAX_REASON = 255;
 // Sau các mã lỗi này dữ liệu trên màn hình đã cũ -> tải lại danh sách khi đóng hộp thoại
-const STALE_CODES = ['ALREADY_CANCELLED', 'CANNOT_CANCEL', 'CANCEL_TOO_LATE'];
-
-const STATUS_ORDER: AppointmentStatus[] = ['PENDING', 'CONFIRMED', 'COMPLETED', 'REJECTED', 'CANCELLED'];
+const STALE_CODES = ['ALREADY_CANCELLED', 'CANNOT_CANCEL', 'CANCEL_NOT_ALLOWED', 'CANCEL_TOO_LATE']; // CANCEL_NOT_ALLOWED: mã trong hợp đồng API-22 (THÊM)
 
 // Thứ tự ưu tiên hiển thị nhóm trạng thái khi chưa chọn bộ lọc
 const STATUS_PRIORITY: Record<AppointmentStatus, number> = {
@@ -28,22 +28,6 @@ const STATUS_PRIORITY: Record<AppointmentStatus, number> = {
   COMPLETED: 3,
   REJECTED: 4,
   CANCELLED: 5,
-};
-
-const STATUS_LABEL: Record<AppointmentStatus, string> = {
-  PENDING: 'Chờ xác nhận',
-  CONFIRMED: 'Đã xác nhận',
-  COMPLETED: 'Hoàn tất',
-  REJECTED: 'Từ chối',
-  CANCELLED: 'Đã hủy',
-};
-
-const STATUS_COLOR: Record<AppointmentStatus, { color: string; bg: string }> = {
-  PENDING: { color: '#b45309', bg: '#fef3c7' },
-  CONFIRMED: { color: '#1d4ed8', bg: '#dbeafe' },
-  COMPLETED: { color: '#15803d', bg: '#dcfce7' },
-  REJECTED: { color: '#b91c1c', bg: '#fee2e2' },
-  CANCELLED: { color: '#475569', bg: '#e2e8f0' },
 };
 
 const Group = ({ label, children }: { label: string; children: ReactNode }) => (
@@ -85,6 +69,8 @@ export default function AppointmentHistory({ user, onLogin, onBooking, refreshKe
   const [cancelError, setCancelError] = useState('');
   const [needReload, setNeedReload] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  // UC011 (THÊM): id lịch đang mở hộp thoại chi tiết
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   // Tải danh sách (API-10). Đổi tài khoản / đặt lịch mới / bấm "Thử lại" thì tải lại.
   useEffect(() => {
@@ -364,6 +350,7 @@ export default function AppointmentHistory({ user, onLogin, onBooking, refreshKe
                       <span style={{ ...styles.statusBadge, color: c.color, backgroundColor: c.bg }}>
                         {STATUS_LABEL[a.status] ?? a.status}
                       </span>
+                      <button className="mh-btn" onClick={() => setDetailId(a.id)} style={styles.btnDetail}>Chi tiết</button>
                       {cancellable && (
                         <button className="mh-btn" onClick={() => openCancel(a)} style={styles.btnCancel}>Hủy lịch</button>
                       )}
@@ -383,6 +370,16 @@ export default function AppointmentHistory({ user, onLogin, onBooking, refreshKe
           </>
         )}
       </section>
+
+      {/* UC011 (THÊM): chi tiết lịch hẹn -> đổi lịch (API-21), hủy (API-22) */}
+      {detailId && (
+        <AppointmentDetailDialog
+          id={detailId}
+          onClose={() => setDetailId(null)}
+          onChanged={(u) => setList((prev) => prev.map((a) => (a.id === u.id ? { ...a, ...u } : a)))}
+          onStale={() => setRetry((n) => n + 1)}
+        />
+      )}
 
       {/* Hộp thoại xác nhận hủy */}
       {cancelTarget && (
@@ -476,6 +473,7 @@ const styles: Record<string, CSSProperties> = {
   btnPrimary: { ...btn, padding: '10px 26px', color: '#fff', border: 'none', background: 'linear-gradient(135deg,#4f9cf9,#3b82f6)' },
   btnLine: { ...btn, padding: '10px 22px', color: '#2563eb', backgroundColor: '#fff', border: '1.5px solid #2563eb' },
   btnCancel: { ...btn, padding: '7.5px 18px', fontSize: 15, color: '#dc2626', backgroundColor: '#fff', border: '1.5px solid #dc2626' },
+  btnDetail: { ...btn, padding: '7.5px 18px', fontSize: 15, color: '#2563eb', backgroundColor: '#fff', border: '1.5px solid #2563eb' }, // UC011 (THÊM)
   btnDanger: { ...btn, padding: '10px 22px', color: '#fff', backgroundColor: '#dc2626', border: 'none' },
 
   // Hộp thoại hủy lịch
