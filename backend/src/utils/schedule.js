@@ -83,6 +83,23 @@ const findSlotInSchedule = (blocks, time) => {
   return null;
 };
 
+// Số phút từ "bây giờ" (giờ VN) đến thời điểm ngày+giờ của 1 lịch hẹn. Âm
+// nghĩa là đã qua giờ khám. Dùng cho UC011 để kiểm tra điều kiện "trước giờ
+// khám >= 2 giờ" khi đổi/hủy lịch (API-21, API-22). Cách tính: quy cả 2 mốc
+// về cùng 1 kiểu "mili-giây kiểu UTC nhưng mang giá trị giờ VN", giống hệt
+// cách getTodayInVietnam() đang làm, để phép trừ ra đúng số phút thực tế
+// theo giờ VN mà không cần thư viện timezone ngoài.
+const getMinutesUntil = (dateStr, timeStr) => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hour, minute] = timeStr.split(':').map(Number);
+  const targetMs = Date.UTC(year, month - 1, day, hour, minute);
+
+  const vnOffsetMs = 7 * 60 * 60 * 1000;
+  const nowVNMs = Date.now() + vnOffsetMs;
+
+  return (targetMs - nowVNMs) / 60000;
+};
+
 module.exports = {
   DATE_REGEX,
   TIME_REGEX,
@@ -93,5 +110,6 @@ module.exports = {
   timeToMinutes,
   minutesToTime,
   generateSlotsFromBlock,
-  findSlotInSchedule
+  findSlotInSchedule,
+  getMinutesUntil
 };
