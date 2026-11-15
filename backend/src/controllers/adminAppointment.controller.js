@@ -3,6 +3,7 @@
  * GET   /api/admin/appointments                       (API-25) - xem tất cả lịch hẹn
  * PATCH /api/admin/appointments/:id/status             (API-26) - xác nhận/từ chối/hủy
  * POST  /api/admin/appointments/:id/medical-record      (API-27) - hoàn tất khám + lưu hồ sơ bệnh án
+ * GET   /api/admin/appointments/:id/medical-record      (API-27, xem lại) - xem hồ sơ bệnh án đã lưu
  */
 
 const supabase = require('../config/supabase.config');
@@ -249,8 +250,64 @@ const completeAppointmentWithRecord = async (req, res) => {
   }
 };
 
+// GET /api/admin/appointments/:id/medical-record - xem lại hồ sơ bệnh án + đơn
+// thuốc đã lưu ở API-27 (UC011-Admin). Chỉ đọc, trả hình dạng như API-12.
+const getAppointmentMedicalRecord = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const NOT_FOUND = 'Không tìm thấy hồ sơ bệnh án';
+
+    // id sai định dạng UUID -> 404, tránh lỗi database 500.
+    if (!UUID_REGEX.test(id)) {
+      return fail(res, 404, NOT_FOUND);
+    }
+
+    // Admin xem được mọi hồ sơ nên không lọc theo bệnh nhân.
+    // appointment_id là UNIQUE trong medical_records nên tối đa 1 dòng.
+    const { data: record, error } = await supabase
+      .from('medical_records')
+      .select(
+        'id, appointment_id, diagnosis, notes, created_at, ' +
+          'appointment:appointments(appointment_date), ' +
+          'doctor:doctors(id, full_name, specialty), ' +
+          'prescription_items(id, medicine_name, dosage, frequency, duration_days, instructions)'
+      )
+      .eq('appointment_id', id)
+      .maybeSingle();
+    if (error) throw error;
+
+    // Lịch hẹn không tồn tại hoặc chưa có hồ sơ -> cùng 1 thông báo 404.
+    if (!record) {
+      return fail(res, 404, NOT_FOUND);
+    }
+
+    return success(res, 200, 'Lấy hồ sơ bệnh án thành công', {
+      record: {
+        id: record.id,
+        appointment_id: record.appointment_id,
+        appointment_date: record.appointment ? record.appointment.appointment_date : null,
+        doctor: record.doctor,
+        diagnosis: record.diagnosis,
+        notes: record.notes,
+        created_at: record.created_at,
+        prescriptions: (record.prescription_items || []).map((item) => ({
+          id: item.id,
+          medicine_name: item.medicine_name,
+          dosage: item.dosage,
+          frequency: item.frequency,
+          duration_days: item.duration_days,
+          instructions: item.instructions,
+        })),
+      },
+    });
+  } catch (error) {
+    return serverError(res, 'UC011-Admin - getAppointmentMedicalRecord', error);
+  }
+};
+
 module.exports = {
   listAppointments,
   updateAppointmentStatus,
   completeAppointmentWithRecord,
+  getAppointmentMedicalRecord,
 };

@@ -2,6 +2,7 @@
 // GET   /api/admin/appointments                      - API-25
 // PATCH /api/admin/appointments/:id/status           - API-26
 // POST  /api/admin/appointments/:id/medical-record   - API-27
+// GET   /api/admin/appointments/:id/medical-record   - API-27 (xem lai ho so)
 
 const express = require('express');
 const router = express.Router();
@@ -10,6 +11,7 @@ const {
   listAppointments,
   updateAppointmentStatus,
   completeAppointmentWithRecord,
+  getAppointmentMedicalRecord,
 } = require('../controllers/adminAppointment.controller');
 
 // Khong dung router.use(verifyToken, requireRole('ADMIN')) o cap router vi
@@ -18,5 +20,6 @@ const {
 router.get('/appointments', verifyToken, requireRole('ADMIN'), listAppointments);
 router.patch('/appointments/:id/status', verifyToken, requireRole('ADMIN'), updateAppointmentStatus);
 router.post('/appointments/:id/medical-record', verifyToken, requireRole('ADMIN'), completeAppointmentWithRecord);
+router.get('/appointments/:id/medical-record', verifyToken, requireRole('ADMIN'), getAppointmentMedicalRecord);
 
 module.exports = router;
