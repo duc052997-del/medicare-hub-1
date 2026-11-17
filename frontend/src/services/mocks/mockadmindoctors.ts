@@ -313,30 +313,19 @@ export const mockUpdate = async (
   return { message: 'Cập nhật bác sĩ thành công', doctor };
 };
 
-/** soft = ngừng; hard = xóa hẳn khỏi kho (chỉ khi đã is_active=false hoặc hard=true) */
-export const mockRemove = async (
-  id: string,
-  opts?: { hard?: boolean }
-): Promise<{ message: string }> => {
+/** Ngừng hoạt động (soft delete); bác sĩ đã ngừng thì báo không tìm thấy như BE */
+export const mockRemove = async (id: string): Promise<{ message: string }> => {
   await delay();
   requireAdmin();
   const list = load();
   const idx = list.findIndex((d) => d.id === id);
-  if (idx < 0) throw new ApiError(404, NOT_FOUND);
+  if (idx < 0 || !list[idx].is_active) throw new ApiError(404, NOT_FOUND);
   const doc = list[idx];
   const holding = loadAppointments().some(
     (a) => String(a.doctor_id) === String(id) && (a.status === 'PENDING' || a.status === 'CONFIRMED')
   );
   if (holding) throw new ApiError(409, 'Bác sĩ còn lịch hẹn chưa hoàn tất', 'FUTURE_APPOINTMENTS');
 
-  // Xóa triệt để: bác sĩ đã ngừng, hoặc gọi kèm hard
-  if (opts?.hard || !doc.is_active) {
-    const next = list.filter((d) => d.id !== id);
-    save(next);
-    return { message: 'Đã xóa triệt để bác sĩ' };
-  }
-
-  // Lần 1: soft delete
   const next = list.slice();
   next[idx] = { ...doc, is_active: false };
   save(next);

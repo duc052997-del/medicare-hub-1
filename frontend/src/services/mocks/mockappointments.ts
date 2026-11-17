@@ -178,7 +178,7 @@ export const mockGetDetail = async (id: string): Promise<AppointmentDetail> => {
 };
 
 // ================= API-21  PATCH /appointments/:id/reschedule =================
-// Giữ nguyên bác sĩ và trạng thái, chỉ đổi ngày/giờ. Khung giờ mới phải theo cùng luật đặt lịch UC006 (30 ngày, trước 24 giờ),
+// Giữ nguyên bác sĩ, đổi ngày/giờ và đưa lịch về PENDING (SRS v8: Admin xác nhận lại). Khung giờ mới phải theo cùng luật đặt lịch UC006 (30 ngày, trước 24 giờ),
 // nằm trong lịch làm việc, chưa ai đặt (unique index, bỏ qua chính lịch này vì giờ cũ khác giờ mới).
 export const mockReschedule = async (id: string, payload: ReschedulePayload): Promise<RescheduleResult> => {
   await delay();
@@ -216,6 +216,6 @@ export const mockReschedule = async (id: string, payload: ReschedulePayload): Pr
     throw new ApiError(409, 'Bạn đã có lịch khám khác vào khung giờ này, vui lòng chọn khung giờ khác', 'SLOT_TAKEN');
   }
 
-  const updated = updateAppointment(id, { appointment_date: date, start_time: slot.start, end_time: slot.end });
-  return { message: 'Đổi lịch hẹn thành công', appointment: toPublic(updated!) };
+  const updated = updateAppointment(id, { appointment_date: date, start_time: slot.start, end_time: slot.end, status: 'PENDING' });
+  return { message: 'Đổi lịch hẹn thành công, lịch đang chờ phòng khám xác nhận', appointment: toPublic(updated!) };
 };

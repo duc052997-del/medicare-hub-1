@@ -8,10 +8,23 @@
 
 const supabase = require('../config/supabase.config');
 const { success, fail, serverError } = require('../utils/response');
-const { UUID_REGEX, isValidCalendarDate } = require('../utils/schedule');
+const { UUID_REGEX, isValidCalendarDate, getMinutesUntil } = require('../utils/schedule');
 
 const VALID_STATUSES = new Set(['PENDING', 'CONFIRMED', 'REJECTED', 'COMPLETED', 'CANCELLED']);
 const MAX_REASON_LENGTH = 255;
+
+// SRS v8 UC011 phần ràng buộc: giới hạn dữ liệu bệnh án, BE kiểm tra cùng FE.
+const RECORD_LIMITS = {
+  diagnosis: 1000,
+  notes: 2000,
+  items: 20,
+  shortField: 100, // medicine_name, dosage, frequency
+  instructions: 255,
+  maxDays: 365,
+};
+
+const isBlank = (v) => v === undefined || v === null || (typeof v === 'string' && !v.trim());
+const recordInvalid = (res, field) => fail(res, 400, 'Vui lòng nhập đầy đủ thông tin', { field });
 
 // Các bước chuyển trạng thái hợp lệ Admin được phép thực hiện qua API-26.
 // COMPLETED chỉ đi qua API-27 (uc011_complete_appointment), không đi qua
@@ -135,7 +148,7 @@ const updateAppointmentStatus = async (req, res) => {
 
     const { data: appointment, error: fetchError } = await supabase
       .from('appointments')
-      .select('id, status')
+      .select('id, status, appointment_date, start_time')
       .eq('id', id)
       .maybeSingle();
     if (fetchError) throw fetchError;
@@ -148,6 +161,14 @@ const updateAppointmentStatus = async (req, res) => {
     const allowedTargets = ALLOWED_TRANSITIONS[appointment.status];
     if (!allowedTargets || !allowedTargets.has(status)) {
       return fail(res, 400, 'Chuyển trạng thái không hợp lệ', { code: 'INVALID_STATUS_TRANSITION' });
+    }
+
+    // SRS v8 luồng 16a: không xác nhận lịch đã đến hoặc quá giờ khám.
+    if (status === 'CONFIRMED' &&
+        getMinutesUntil(appointment.appointment_date, String(appointment.start_time).slice(0, 5)) <= 0) {
+      return fail(res, 400, 'Lịch hẹn đã đến hoặc quá giờ khám, không thể xác nhận', {
+        code: 'APPOINTMENT_TIME_PASSED'
+      });
     }
 
     const trimmedReason = typeof reason === 'string' && reason.trim() ? reason.trim() : null;
@@ -192,30 +213,60 @@ const completeAppointmentWithRecord = async (req, res) => {
     if (!UUID_REGEX.test(id)) {
       return fail(res, 404, 'Không tìm thấy lịch hẹn');
     }
-    if (typeof diagnosis !== 'string' || !diagnosis.trim()) {
-      return fail(res, 400, 'Vui lòng nhập đầy đủ thông tin', { field: 'diagnosis' });
+    if (typeof diagnosis !== 'string' || !diagnosis.trim() ||
+        diagnosis.trim().length > RECORD_LIMITS.diagnosis) {
+      return recordInvalid(res, 'diagnosis');
     }
-    if (notes !== undefined && notes !== null && typeof notes !== 'string') {
-      return fail(res, 400, 'Vui lòng nhập đầy đủ thông tin', { field: 'notes' });
+    if (notes !== undefined && notes !== null &&
+        (typeof notes !== 'string' || notes.trim().length > RECORD_LIMITS.notes)) {
+      return recordInvalid(res, 'notes');
     }
 
     let items = [];
     if (prescriptions !== undefined && prescriptions !== null) {
-      if (!Array.isArray(prescriptions)) {
-        return fail(res, 400, 'Vui lòng nhập đầy đủ thông tin', { field: 'prescriptions' });
-      }
-      for (const item of prescriptions) {
-        if (!item || typeof item.medicine_name !== 'string' || !item.medicine_name.trim()) {
-          return fail(res, 400, 'Vui lòng nhập đầy đủ thông tin', { field: 'prescriptions' });
+      if (!Array.isArray(prescriptions)) return recordInvalid(res, 'prescriptions');
+      // Dòng thuốc trống hoàn toàn được bỏ qua (SRS v8 UC011).
+      const rows = prescriptions.filter((item) => !(item && typeof item === 'object' &&
+        ['medicine_name', 'dosage', 'frequency', 'duration_days', 'instructions'].every((k) => isBlank(item[k]))));
+      if (rows.length > RECORD_LIMITS.items) return recordInvalid(res, 'prescriptions');
+      for (const item of rows) {
+        if (!item || typeof item !== 'object' ||
+            typeof item.medicine_name !== 'string' || !item.medicine_name.trim()) {
+          return recordInvalid(res, 'prescriptions');
+        }
+        for (const [key, max] of [['medicine_name', RECORD_LIMITS.shortField], ['dosage', RECORD_LIMITS.shortField],
+          ['frequency', RECORD_LIMITS.shortField], ['instructions', RECORD_LIMITS.instructions]]) {
+          if (!isBlank(item[key]) && (typeof item[key] !== 'string' || item[key].trim().length > max)) {
+            return recordInvalid(res, 'prescriptions');
+          }
+        }
+        if (!isBlank(item.duration_days) &&
+            (!Number.isInteger(item.duration_days) || item.duration_days < 1 || item.duration_days > RECORD_LIMITS.maxDays)) {
+          return recordInvalid(res, 'prescriptions');
         }
       }
-      items = prescriptions.map((item) => ({
+      items = rows.map((item) => ({
         medicine_name: item.medicine_name.trim(),
-        dosage: typeof item.dosage === 'string' ? item.dosage.trim() : null,
-        frequency: typeof item.frequency === 'string' ? item.frequency.trim() : null,
+        dosage: typeof item.dosage === 'string' && item.dosage.trim() ? item.dosage.trim() : null,
+        frequency: typeof item.frequency === 'string' && item.frequency.trim() ? item.frequency.trim() : null,
         duration_days: Number.isInteger(item.duration_days) ? item.duration_days : null,
-        instructions: typeof item.instructions === 'string' ? item.instructions.trim() : null,
+        instructions: typeof item.instructions === 'string' && item.instructions.trim() ? item.instructions.trim() : null,
       }));
+    }
+
+    // SRS v8 luồng 19a: chỉ hoàn tất khi đã đến giờ khám. Trạng thái và việc
+    // đã có bệnh án vẫn do RPC kiểm tra trong transaction.
+    const { data: appointment, error: fetchError } = await supabase
+      .from('appointments')
+      .select('id, appointment_date, start_time')
+      .eq('id', id)
+      .maybeSingle();
+    if (fetchError) throw fetchError;
+    if (!appointment) {
+      return fail(res, 404, 'Không tìm thấy lịch hẹn');
+    }
+    if (getMinutesUntil(appointment.appointment_date, String(appointment.start_time).slice(0, 5)) > 0) {
+      return fail(res, 400, 'Chưa đến giờ khám, chưa thể hoàn tất', { code: 'NOT_STARTED' });
     }
 
     const { data: record, error } = await supabase.rpc('uc011_complete_appointment', {

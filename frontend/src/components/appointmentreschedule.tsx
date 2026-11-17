@@ -1,5 +1,5 @@
 // components/appointmentreschedule.tsx — UC011 (bệnh nhân): form ĐỔI LỊCH (API-21), hiện trong hộp thoại Chi tiết lịch hẹn.
-// Chỉ đổi ngày/giờ, giữ nguyên bác sĩ. Khung giờ lấy từ API-08 của đúng bác sĩ; luật chọn giờ như đặt lịch UC006
+// Chỉ đổi ngày/giờ, giữ nguyên bác sĩ; đổi xong lịch về Chờ xác nhận (SRS v8). Khung giờ lấy từ API-08 của đúng bác sĩ; luật chọn giờ như đặt lịch UC006
 // (từ ngày mai tới +30 ngày, trước giờ khám >= 24 giờ). Dựng danh sách ô giờ ở utils/reschedule.ts.
 import { useEffect, useMemo, useState } from 'react';
 import { appointmentService } from '../services/appointmentservice';
@@ -92,7 +92,7 @@ export default function AppointmentReschedule({ appointment: a, onBack, onDone, 
     setError('');
     try {
       const result = await appointmentService.reschedule(a.id, { date, time });
-      onDone(result.appointment, result.message || 'Đổi lịch hẹn thành công');
+      onDone(result.appointment, result.message || 'Đổi lịch hẹn thành công, lịch đang chờ phòng khám xác nhận');
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : null;
       setError(apiErr?.message || GENERIC_ERROR);
@@ -115,6 +115,11 @@ export default function AppointmentReschedule({ appointment: a, onBack, onDone, 
         <div style={s.sumRow}><span style={s.sumLabel}>Bác sĩ</span><span style={s.sumValue}><b>{a.doctor.full_name}</b> ({a.doctor.specialty})</span></div>
         <div style={s.sumRow}><span style={s.sumLabel}>Lịch hiện tại</span><span style={s.sumValue}>{a.start_time} - {a.end_time}, {formatDate(a.appointment_date)}</span></div>
       </div>
+      {a.status === 'CONFIRMED' && (
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#b45309' }}>
+          Lịch đã được xác nhận. Sau khi đổi giờ, lịch sẽ chuyển về Chờ xác nhận để phòng khám duyệt lại.
+        </p>
+      )}
 
       <div style={s.group}>
         <label style={s.label}>Ngày khám mới <span style={{ color: '#ef4444' }}>*</span></label>

@@ -1,5 +1,5 @@
-// components/admindoctorform.tsx — Form thêm/sửa bác sĩ + lịch theo giai đoạn (UC010 hướng B).
-// Mỗi giai đoạn: Từ ngày → Đến ngày + nhiều khung giờ/thứ; giai đoạn sau chỉ bắt đầu sau ngày kết thúc đoạn trước.
+// components/admindoctorform.tsx — Form thêm/sửa bác sĩ + lịch làm việc lặp theo tuần (UC010).
+// SRS v8: lịch chỉ gồm các dòng thứ + giờ bắt đầu/kết thúc + thời lượng; không có mốc ngày/giai đoạn.
 import { useEffect, useRef, useState } from 'react';
 import AvatarPicker from './avatarpicker';
 import { ApiError } from '../services/apierror';
@@ -34,13 +34,6 @@ const sortSlots = (slots: SlotRow[]): SlotRow[] =>
     return a.start_time.localeCompare(b.start_time) || a.end_time.localeCompare(b.end_time);
   });
 
-/** Một giai đoạn hiệu lực + các khung giờ trong giai đoạn */
-type SchedulePeriod = {
-  valid_from: string;
-  valid_to: string;
-  slots: SlotRow[];
-};
-
 const emptySlot = (): SlotRow => ({
   day_of_week: 1,
   start_time: '08:00',
@@ -48,58 +41,26 @@ const emptySlot = (): SlotRow => ({
   slot_minutes: 30,
 });
 
-const emptyPeriod = (from = '', to = ''): SchedulePeriod => ({
-  valid_from: from,
-  valid_to: to,
-  slots: [emptySlot()],
-});
+/** Lịch từ BE → các dòng khung giờ (bỏ qua mọi mốc ngày cũ nếu có) */
+const toSlots = (rows: DoctorSchedule[] | undefined): SlotRow[] =>
+  rows?.length
+    ? sortSlots(
+        rows.map((x) => ({
+          day_of_week: x.day_of_week,
+          start_time: x.start_time.slice(0, 5),
+          end_time: x.end_time.slice(0, 5),
+          slot_minutes: x.slot_minutes,
+        }))
+      )
+    : [emptySlot()];
 
-/** +1 ngày YYYY-MM-DD */
-const nextDay = (ymd: string): string => {
-  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return '';
-  const d = new Date(`${ymd}T12:00:00`);
-  d.setDate(d.getDate() + 1);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
-/** Gom schedules phẳng → giai đoạn theo cặp valid_from|valid_to */
-const groupToPeriods = (rows: DoctorSchedule[] | undefined): SchedulePeriod[] => {
-  if (!rows?.length) return [emptyPeriod()];
-  const map = new Map<string, SchedulePeriod>();
-  for (const x of rows) {
-    const from = x.valid_from?.trim() || '';
-    const to = x.valid_to?.trim() || '';
-    const key = `${from}||${to}`;
-    if (!map.has(key)) {
-      map.set(key, { valid_from: from, valid_to: to, slots: [] });
-    }
-    map.get(key)!.slots.push({
-      day_of_week: x.day_of_week,
-      start_time: x.start_time.slice(0, 5),
-      end_time: x.end_time.slice(0, 5),
-      slot_minutes: x.slot_minutes,
-    });
-  }
-  return [...map.values()].map((p) => ({
-    ...p,
-    slots: sortSlots(p.slots.length ? p.slots : [emptySlot()]),
+const slotsToSchedules = (slots: SlotRow[]): AdminDoctorPayload['schedules'] =>
+  slots.map((slot) => ({
+    day_of_week: slot.day_of_week,
+    start_time: slot.start_time,
+    end_time: slot.end_time,
+    slot_minutes: slot.slot_minutes,
   }));
-};
-
-const periodsToSchedules = (periods: SchedulePeriod[]): AdminDoctorPayload['schedules'] =>
-  periods.flatMap((p) =>
-    p.slots.map((slot) => ({
-      day_of_week: slot.day_of_week,
-      start_time: slot.start_time,
-      end_time: slot.end_time,
-      slot_minutes: slot.slot_minutes,
-      valid_from: p.valid_from.trim() ? p.valid_from.trim() : null,
-      valid_to: p.valid_to.trim() ? p.valid_to.trim() : null,
-    }))
-  );
 
 type FieldErrors = Partial<
   Record<'full_name' | 'specialty' | 'email' | 'phone' | 'avatar_url' | 'schedules', string>
@@ -121,15 +82,13 @@ export default function AdminDoctorForm({ doctorId, onClose, onSaved }: DoctorFo
     bio: '',
     is_featured: false,
   });
-  const [periods, setPeriods] = useState<SchedulePeriod[]>([emptyPeriod()]);
+  const [slots, setSlots] = useState<SlotRow[]>([emptySlot()]);
   const [loading, setLoading] = useState(!!doctorId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
-  /** Lỗi từng dòng khung giờ: key `${periodIndex}-${slotIndex}` */
+  /** Lỗi từng dòng khung giờ: key = chỉ số dòng */
   const [slotErrors, setSlotErrors] = useState<Record<string, string>>({});
-  /** Lỗi khoảng ngày giai đoạn: key periodIndex */
-  const [periodErrors, setPeriodErrors] = useState<Record<number, string>>({});
   const bodyRef = useRef<HTMLDivElement>(null);
 
   /** Cuộn trong khung form tới vùng có lỗi (field hoặc banner chung) */
@@ -165,7 +124,7 @@ export default function AdminDoctorForm({ doctorId, onClose, onSaved }: DoctorFo
           bio: d.bio ?? '',
           is_featured: d.is_featured,
         });
-        setPeriods(groupToPeriods(d.schedules));
+        setSlots(toSlots(d.schedules));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -186,99 +145,40 @@ export default function AdminDoctorForm({ doctorId, onClose, onSaved }: DoctorFo
     });
   };
 
-  const updatePeriod = (pi: number, patch: Partial<SchedulePeriod>) => {
-    setPeriods((prev) => {
-      const next = prev.map((p, i) => (i === pi ? { ...p, ...patch } : p));
-      return next;
-    });
-    setPeriodErrors((e) => {
-      const n = { ...e };
-      delete n[pi];
-      return n;
-    });
+  const clearScheduleError = () =>
     setErrors((e) => {
       const n = { ...e };
       delete n.schedules;
       return n;
     });
-  };
 
-  const updateSlot = (pi: number, si: number, patch: Partial<SlotRow>) => {
-    setPeriods((prev) =>
-      prev.map((p, i) => {
-        if (i !== pi) return p;
-        const slots = sortSlots(p.slots.map((sl, j) => (j === si ? { ...sl, ...patch } : sl)));
-        return { ...p, slots };
-      })
-    );
+  const updateSlot = (si: number, patch: Partial<SlotRow>) => {
+    setSlots((prev) => sortSlots(prev.map((sl, j) => (j === si ? { ...sl, ...patch } : sl))));
     setSlotErrors((e) => {
       const n = { ...e };
-      delete n[`${pi}-${si}`];
+      delete n[String(si)];
       return n;
     });
-    setErrors((e) => {
-      const n = { ...e };
-      delete n.schedules;
-      return n;
+    clearScheduleError();
+  };
+
+  const addSlot = () => {
+    // Mặc định khi + Thêm khung giờ: CN 13:00–17:00
+    const defaultNew: SlotRow = { day_of_week: 0, start_time: '13:00', end_time: '17:00', slot_minutes: 30 };
+    setSlots((prev) => sortSlots([...prev, defaultNew]));
+  };
+
+  /** Luôn giữ ít nhất một dòng (SRS v8 UC010) */
+  const removeSlot = (si: number) => {
+    setSlots((prev) => {
+      const next = sortSlots(prev.filter((_, j) => j !== si));
+      return next.length ? next : [emptySlot()];
     });
   };
 
-  const addSlot = (pi: number) => {
-    // Mặc định khi + Thêm khung giờ: CN 13:00–17:00 (1ch–5ch)
-    const defaultNew: SlotRow = {
-      day_of_week: 0,
-      start_time: '13:00',
-      end_time: '17:00',
-      slot_minutes: 30,
-    };
-    setPeriods((prev) =>
-      prev.map((p, i) => (i === pi ? { ...p, slots: sortSlots([...p.slots, defaultNew]) } : p))
-    );
-  };
-
-  const removeSlot = (pi: number, si: number) => {
-    setPeriods((prev) =>
-      prev.map((p, i) => {
-        if (i !== pi) return p;
-        const slots = sortSlots(p.slots.filter((_, j) => j !== si));
-        return { ...p, slots: slots.length ? slots : [emptySlot()] };
-      })
-    );
-  };
-
-  /** Thêm giai đoạn: from tối thiểu = ngày sau valid_to của đoạn trước */
-  const addPeriod = () => {
-    setPeriods((prev) => {
-      const last = prev[prev.length - 1];
-      if (!last?.valid_to?.trim()) {
-        setErrors((e) => ({
-          ...e,
-          schedules: 'Hãy nhập "Đến ngày" cho giai đoạn trước trước khi thêm giai đoạn mới.',
-        }));
-        return prev;
-      }
-      const from = nextDay(last.valid_to.trim());
-      return [...prev, emptyPeriod(from, '')];
-    });
-  };
-
-  const removePeriod = (pi: number) => {
-    setPeriods((prev) => (prev.length <= 1 ? [emptyPeriod()] : prev.filter((_, i) => i !== pi)));
-  };
-
-  /** Ngày bắt đầu tối thiểu của giai đoạn pi (sau ngày kết thúc đoạn trước) */
-  const minFromFor = (pi: number): string => {
-    if (pi <= 0) return '';
-    const prevTo = periods[pi - 1]?.valid_to?.trim();
-    return prevTo ? nextDay(prevTo) : '';
-  };
-
-  const validateLocal = (
-    list: SchedulePeriod[] = periods
-  ): { fields: FieldErrors; slots: Record<string, string>; periods: Record<number, string> } => {
+  const validateLocal = (list: SlotRow[] = slots): { fields: FieldErrors; slots: Record<string, string> } => {
     const e: FieldErrors = {};
     const slotErr: Record<string, string> = {};
-    const periodErr: Record<number, string> = {};
     const name = form.full_name.trim();
     const email = form.email.trim();
     const phone = form.phone.replace(/\s/g, '');
@@ -290,85 +190,49 @@ export default function AdminDoctorForm({ doctorId, onClose, onSaved }: DoctorFo
     else if (!isValidPhone(phone)) e.phone = 'Số điện thoại gồm 10 số, bắt đầu bằng 0.';
 
     const mins = toMinutes;
-    const minFromOf = (pi: number) => {
-      if (pi <= 0) return '';
-      const prevTo = list[pi - 1]?.valid_to?.trim();
-      return prevTo ? nextDay(prevTo) : '';
-    };
-    for (let pi = 0; pi < list.length; pi++) {
-      const p = list[pi];
-      const from = p.valid_from.trim();
-      const to = p.valid_to.trim();
-      const minFrom = minFromOf(pi);
-      if (from && to && from > to) {
-        periodErr[pi] = 'Đến ngày phải ≥ Từ ngày.';
-        e.schedules = 'Khoảng ngày giai đoạn không hợp lệ.';
-      } else if (minFrom && from && from < minFrom) {
-        periodErr[pi] = `Từ ngày phải từ ${minFrom} trở đi.`;
-        e.schedules = 'Khoảng ngày giai đoạn không hợp lệ.';
-      } else if (minFrom && !from) {
-        periodErr[pi] = `Cần chọn Từ ngày (tối thiểu ${minFrom}).`;
-        e.schedules = 'Khoảng ngày giai đoạn không hợp lệ.';
-      }
-      for (let si = 0; si < p.slots.length; si++) {
-        const row = p.slots[si];
-        const key = `${pi}-${si}`;
-        if (!row.start_time || !row.end_time) {
-          slotErr[key] = 'Thiếu giờ bắt đầu hoặc kết thúc.';
-          e.schedules = 'Có khung giờ không hợp lệ — xem dòng đỏ.';
-        } else if (mins(row.end_time) <= mins(row.start_time)) {
-          slotErr[key] = 'Giờ kết thúc phải sau giờ bắt đầu.';
-          e.schedules = 'Có khung giờ không hợp lệ — xem dòng đỏ.';
-        } else if (!row.slot_minutes || row.slot_minutes <= 0) {
-          slotErr[key] = 'Thời lượng slot phải > 0 (phút).';
-          e.schedules = 'Có khung giờ không hợp lệ — xem dòng đỏ.';
-        } else if (row.slot_minutes > mins(row.end_time) - mins(row.start_time)) {
-          slotErr[key] = 'Slot (phút) không được lớn hơn độ dài khung giờ.';
-          e.schedules = 'Có khung giờ không hợp lệ — xem dòng đỏ.';
-        }
-      }
-      // Trùng / giao giờ cùng thứ → đánh dấu dòng phía sau (không báo chung mơ hồ)
-      for (let si = 0; si < p.slots.length; si++) {
-        const a = p.slots[si];
-        if (!a.start_time || !a.end_time) continue;
-        if (mins(a.end_time) <= mins(a.start_time)) continue;
-        for (let sj = si + 1; sj < p.slots.length; sj++) {
-          const b = p.slots[sj];
-          if (!b.start_time || !b.end_time) continue;
-          if (a.day_of_week !== b.day_of_week) continue;
-          const sameExact =
-            a.start_time === b.start_time &&
-            a.end_time === b.end_time &&
-            Number(a.slot_minutes) === Number(b.slot_minutes);
-          const overlap = a.start_time < b.end_time && b.start_time < a.end_time;
-          if (!sameExact && !overlap) continue;
-          const dayName = DAY_LABEL[b.day_of_week] ?? `ngày ${b.day_of_week}`;
-          const key = `${pi}-${sj}`;
-          slotErr[key] = sameExact
-            ? `Trùng khung giờ với dòng trước: ${dayName} ${a.start_time}–${a.end_time}. Hãy xóa hoặc đổi giờ.`
-            : `Giao giờ với khung ${dayName} ${a.start_time}–${a.end_time}. Hãy chỉnh giờ bắt đầu/kết thúc.`;
-          e.schedules = 'Có khung giờ trùng trong cùng giai đoạn — xem dòng đỏ bên dưới.';
-        }
+    const BAD = 'Có khung giờ không hợp lệ — xem dòng đỏ.';
+    list.forEach((row, si) => {
+      const key = String(si);
+      if (!row.start_time || !row.end_time) slotErr[key] = 'Thiếu giờ bắt đầu hoặc kết thúc.';
+      else if (mins(row.end_time) <= mins(row.start_time)) slotErr[key] = 'Giờ kết thúc phải sau giờ bắt đầu.';
+      else if (!row.slot_minutes || row.slot_minutes <= 0) slotErr[key] = 'Thời lượng slot phải > 0 (phút).';
+      else if (row.slot_minutes > mins(row.end_time) - mins(row.start_time))
+        slotErr[key] = 'Slot (phút) không được lớn hơn độ dài khung giờ.';
+      if (slotErr[key]) e.schedules = BAD;
+    });
+    // Trùng / giao giờ cùng thứ → đánh dấu dòng phía sau
+    for (let si = 0; si < list.length; si++) {
+      const a = list[si];
+      if (!a.start_time || !a.end_time || mins(a.end_time) <= mins(a.start_time)) continue;
+      for (let sj = si + 1; sj < list.length; sj++) {
+        const b = list[sj];
+        if (!b.start_time || !b.end_time || a.day_of_week !== b.day_of_week) continue;
+        const sameExact = a.start_time === b.start_time && a.end_time === b.end_time;
+        const overlap = a.start_time < b.end_time && b.start_time < a.end_time;
+        if (!sameExact && !overlap) continue;
+        const dayName = DAY_LABEL[b.day_of_week] ?? `ngày ${b.day_of_week}`;
+        slotErr[String(sj)] = sameExact
+          ? `Trùng khung giờ với dòng trước: ${dayName} ${a.start_time}–${a.end_time}. Hãy xóa hoặc đổi giờ.`
+          : `Giao giờ với khung ${dayName} ${a.start_time}–${a.end_time}. Hãy chỉnh giờ bắt đầu/kết thúc.`;
+        e.schedules = 'Có khung giờ trùng hoặc chồng nhau — xem dòng đỏ bên dưới.';
       }
     }
-    return { fields: e, slots: slotErr, periods: periodErr };
+    return { fields: e, slots: slotErr };
   };
 
   const submit = async () => {
     setSaving(true);
     setError('');
     // Sắp xếp lại khung giờ T2→CN trước khi lưu
-    const orderedPeriods = periods.map((p) => ({ ...p, slots: sortSlots(p.slots) }));
-    setPeriods(orderedPeriods);
+    const ordered = sortSlots(slots);
+    setSlots(ordered);
 
-    const local = validateLocal(orderedPeriods);
+    const local = validateLocal(ordered);
     const hasField = Object.keys(local.fields).length > 0;
     const hasSlot = Object.keys(local.slots).length > 0;
-    const hasPeriod = Object.keys(local.periods).length > 0;
-    if (hasField || hasSlot || hasPeriod) {
+    if (hasField || hasSlot) {
       setErrors(local.fields);
       setSlotErrors(local.slots);
-      setPeriodErrors(local.periods);
       setSaving(false);
       if (hasSlot) {
         const firstKey = Object.keys(local.slots)[0];
@@ -378,8 +242,6 @@ export default function AdminDoctorForm({ doctorId, onClose, onSaved }: DoctorFo
             ?.querySelector(`[data-slot="${firstKey}"]`)
             ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
-      } else if (hasPeriod) {
-        scrollToError('schedules');
       } else {
         const first = (['full_name', 'specialty', 'email', 'phone', 'avatar_url', 'schedules'] as const).find(
           (k) => local.fields[k]
@@ -390,7 +252,6 @@ export default function AdminDoctorForm({ doctorId, onClose, onSaved }: DoctorFo
     }
     setErrors({});
     setSlotErrors({});
-    setPeriodErrors({});
     const payload: AdminDoctorPayload = {
       full_name: form.full_name.trim(),
       specialty: form.specialty.trim(),
@@ -399,7 +260,7 @@ export default function AdminDoctorForm({ doctorId, onClose, onSaved }: DoctorFo
       avatar_url: form.avatar_url?.trim() ? form.avatar_url.trim() : null,
       bio: form.bio?.trim() ? form.bio.trim() : null,
       is_featured: !!form.is_featured,
-      schedules: periodsToSchedules(orderedPeriods),
+      schedules: slotsToSchedules(ordered),
     };
     try {
       const result = doctorId
@@ -551,147 +412,72 @@ export default function AdminDoctorForm({ doctorId, onClose, onSaved }: DoctorFo
                   <label htmlFor="featured">Bác sĩ nổi bật</label>
                 </div>
 
-                {/* —— Lịch theo giai đoạn —— */}
+                {/* —— Lịch làm việc lặp theo tuần —— */}
                 <div style={{ ...s.inputGroup, ...s.formFull }} data-field="schedules">
-                  <label style={s.label}>Lịch làm việc theo giai đoạn</label>
+                  <label style={s.label}>Lịch làm việc hằng tuần</label>
                   <p style={s.scheduleHint}>
-                    Mỗi giai đoạn có khoảng <b>Từ ngày → Đến ngày</b> và các khung giờ (thứ + giờ) trong khoảng đó. Giai
-                    đoạn sau chỉ bắt đầu <b>sau</b> ngày kết thúc giai đoạn trước.
+                    Mỗi dòng là một khung giờ lặp lại hằng tuần: <b>thứ</b>, giờ bắt đầu, giờ kết thúc và thời lượng mỗi lượt khám.
                   </p>
 
                   <div style={s.scheduleScroll}>
-                    {periods.map((period, pi) => {
-                      const minFrom = minFromFor(pi);
-                      return (
-                        <div key={pi} style={s.periodCard}>
-                          <div style={s.periodHeader}>
-                            <span style={s.periodTitle}>Giai đoạn {pi + 1}</span>
-                            {periods.length > 1 && (
-                              <button
-                                type="button"
-                                className="mh-btn"
-                                style={s.confirmBtnGhost}
-                                onClick={() => removePeriod(pi)}
+                    <div style={s.slotList}>
+                      <div style={s.slotHead}>
+                        <span>Thứ</span>
+                        <span>Bắt đầu</span>
+                        <span>Kết thúc</span>
+                        <span>Slot (phút)</span>
+                        <span />
+                      </div>
+                      {slots.map((row, si) => {
+                        const sk = String(si);
+                        const bad = !!slotErrors[sk];
+                        return (
+                          <div key={si} data-slot={sk} style={s.slotBlock}>
+                            <div style={s.scheduleRow}>
+                              <select
+                                style={{ ...s.select, ...(bad ? s.inputError : {}) }}
+                                value={row.day_of_week}
+                                onChange={(e) => updateSlot(si, { day_of_week: Number(e.target.value) })}
                               >
-                                Xóa giai đoạn
+                                {DAY_ORDER.map((dow) => (
+                                  <option key={dow} value={dow}>
+                                    {DAY_LABEL[dow]}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                style={{ ...s.input, ...(bad ? s.inputError : {}) }}
+                                type="time"
+                                value={row.start_time}
+                                onChange={(e) => updateSlot(si, { start_time: e.target.value })}
+                              />
+                              <input
+                                style={{ ...s.input, ...(bad ? s.inputError : {}) }}
+                                type="time"
+                                value={row.end_time}
+                                onChange={(e) => updateSlot(si, { end_time: e.target.value })}
+                              />
+                              <input
+                                style={{ ...s.input, ...(bad ? s.inputError : {}) }}
+                                type="number"
+                                min={5}
+                                step={5}
+                                value={row.slot_minutes}
+                                onChange={(e) => updateSlot(si, { slot_minutes: Number(e.target.value) || 30 })}
+                              />
+                              <button type="button" className="mh-btn" style={s.confirmBtnGhost} onClick={() => removeSlot(si)}>
+                                Xóa
                               </button>
-                            )}
-                          </div>
-
-                          <div style={s.periodDates}>
-                            <label style={s.scheduleValidLabel}>
-                              Từ ngày
-                              <input
-                                style={{
-                                  ...s.input,
-                                  ...(periodErrors[pi] ? s.inputError : {}),
-                                }}
-                                type="date"
-                                value={period.valid_from}
-                                min={minFrom || undefined}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  if (minFrom && v && v < minFrom) return;
-                                  updatePeriod(pi, { valid_from: v });
-                                }}
-                              />
-                              {minFrom ? (
-                                <span style={s.dateHint}>Chỉ chọn từ {minFrom} trở đi</span>
-                              ) : null}
-                            </label>
-                            <label style={s.scheduleValidLabel}>
-                              Đến ngày
-                              <input
-                                style={{
-                                  ...s.input,
-                                  ...(periodErrors[pi] ? s.inputError : {}),
-                                }}
-                                type="date"
-                                value={period.valid_to}
-                                min={period.valid_from || minFrom || undefined}
-                                onChange={(e) => updatePeriod(pi, { valid_to: e.target.value })}
-                              />
-                            </label>
-                          </div>
-                          {periodErrors[pi] && <span style={s.fieldError}>{periodErrors[pi]}</span>}
-
-                          <div style={s.slotList}>
-                            <div style={s.slotHead}>
-                              <span>Thứ</span>
-                              <span>Bắt đầu</span>
-                              <span>Kết thúc</span>
-                              <span>Slot (phút)</span>
-                              <span />
                             </div>
-                            {period.slots.map((row, si) => {
-                              const sk = `${pi}-${si}`;
-                              const bad = !!slotErrors[sk];
-                              return (
-                              <div key={si} data-slot={sk} style={s.slotBlock}>
-                              <div style={s.scheduleRow}>
-                                <select
-                                  style={{ ...s.select, ...(bad ? s.inputError : {}) }}
-                                  value={row.day_of_week}
-                                  onChange={(e) => updateSlot(pi, si, { day_of_week: Number(e.target.value) })}
-                                >
-                                  {DAY_ORDER.map((dow) => (
-                                    <option key={dow} value={dow}>
-                                      {DAY_LABEL[dow]}
-                                    </option>
-                                  ))}
-                                </select>
-                                <input
-                                  style={{ ...s.input, ...(bad ? s.inputError : {}) }}
-                                  type="time"
-                                  value={row.start_time}
-                                  onChange={(e) => updateSlot(pi, si, { start_time: e.target.value })}
-                                />
-                                <input
-                                  style={{ ...s.input, ...(bad ? s.inputError : {}) }}
-                                  type="time"
-                                  value={row.end_time}
-                                  onChange={(e) => updateSlot(pi, si, { end_time: e.target.value })}
-                                />
-                                <input
-                                  style={{ ...s.input, ...(bad ? s.inputError : {}) }}
-                                  type="number"
-                                  min={5}
-                                  step={5}
-                                  value={row.slot_minutes}
-                                  onChange={(e) =>
-                                    updateSlot(pi, si, { slot_minutes: Number(e.target.value) || 30 })
-                                  }
-                                />
-                                <button
-                                  type="button"
-                                  className="mh-btn"
-                                  style={s.confirmBtnGhost}
-                                  onClick={() => removeSlot(pi, si)}
-                                >
-                                  Xóa
-                                </button>
-                              </div>
-                              {bad && <span style={s.fieldError}>{slotErrors[sk]}</span>}
-                              </div>
-                              );
-                            })}
-                            <button
-                              type="button"
-                              className="mh-btn"
-                              style={s.confirmBtnGhost}
-                              onClick={() => addSlot(pi)}
-                            >
-                              + Thêm khung giờ / thứ
-                            </button>
+                            {bad && <span style={s.fieldError}>{slotErrors[sk]}</span>}
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                      <button type="button" className="mh-btn" style={s.confirmBtnGhost} onClick={addSlot}>
+                        + Thêm khung giờ
+                      </button>
+                    </div>
                   </div>
-
-                  <button type="button" className="mh-btn" style={{ ...s.btnPrimary, marginTop: 10 }} onClick={addPeriod}>
-                    + Thêm giai đoạn
-                  </button>
                   {errors.schedules && <span style={s.fieldError}>{errors.schedules}</span>}
                 </div>
               </div>

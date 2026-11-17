@@ -40,7 +40,7 @@ export const adminAppointmentService = {
     return { message: res.data?.message ?? '', record: res.data?.record };
   },
 
-  // API-30 GET /admin/appointments/:id/medical-record  (Admin)  *** ĐỀ XUẤT, chờ BE làm và nhóm Agreed ***
+  // GET /admin/appointments/:id/medical-record (Admin, SRS v8 UC011 bước 24–25): xem lại bệnh án + đơn thuốc
   // Xem lại hồ sơ đã ghi ở API-27 (chỉ đọc). Response như API-12: { success, message, record }.
   // Lịch không tồn tại hoặc chưa có hồ sơ -> 404 "Không tìm thấy hồ sơ bệnh án"; 401 / 403.
   async getMedicalRecord(id: string): Promise<MedicalRecord> {
