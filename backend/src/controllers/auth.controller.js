@@ -20,6 +20,9 @@ const {
 } = require('../utils/validators');
 
 const EMAIL_TAKEN_MESSAGE = 'Email không hợp lệ hoặc đã được đăng ký';
+// SRS v8 UC002 5a: một thông báo chung cho email chưa đăng ký và sai mật khẩu,
+// không cho biết email nào đã có tài khoản.
+const INVALID_CREDENTIALS_MESSAGE = 'Email hoặc mật khẩu không đúng';
 
 const DUPLICATE_DATA_MESSAGE =
   'Thông tin đăng ký bị trùng, vui lòng kiểm tra lại';
@@ -197,7 +200,7 @@ const login = async (req, res) => {
     const normalizedEmail = normalizeEmail(email);
 
     if (!isValidEmail(normalizedEmail)) {
-      return fail(res, 401, 'Email không tồn tại', {
+      return fail(res, 400, 'Email không đúng định dạng', {
         field: 'email'
       });
     }
@@ -215,8 +218,8 @@ const login = async (req, res) => {
     if (!user) {
       await bcrypt.compare(password, DUMMY_HASH);
 
-      return fail(res, 401, 'Email không tồn tại', {
-        field: 'email'
+      return fail(res, 401, INVALID_CREDENTIALS_MESSAGE, {
+        code: 'INVALID_CREDENTIALS'
       });
     }
 
@@ -225,8 +228,8 @@ const login = async (req, res) => {
       : false;
 
     if (!passwordMatched) {
-      return fail(res, 401, 'Mật khẩu không đúng', {
-        field: 'password'
+      return fail(res, 401, INVALID_CREDENTIALS_MESSAGE, {
+        code: 'INVALID_CREDENTIALS'
       });
     }
 

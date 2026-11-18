@@ -100,7 +100,33 @@ const getMinutesUntil = (dateStr, timeStr) => {
   return (targetMs - nowVNMs) / 60000;
 };
 
+// SRS v8 (UC006, UC011 đổi lịch, mục 1.6): ngày khám từ ngày mai đến ngày mai
+// cộng 30 ngày (giờ VN) và giờ khám cách hiện tại ít nhất 24 giờ. BE tự kiểm
+// tra, không dựa vào FE.
+const MIN_MINUTES_BEFORE_BOOKING = 24 * 60;
+const BOOKING_WINDOW_DAYS = 30;
+
+// Cộng n ngày cho chuỗi YYYY-MM-DD (tính bằng UTC nên không lệch múi giờ).
+const addDays = (dateStr, n) => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + n)).toISOString().slice(0, 10);
+};
+
+const isWithinBookingWindow = (dateStr, timeStr) => {
+  const tomorrow = addDays(getTodayInVietnam(), 1);
+  const lastDay = addDays(tomorrow, BOOKING_WINDOW_DAYS);
+  return (
+    dateStr >= tomorrow &&
+    dateStr <= lastDay &&
+    getMinutesUntil(dateStr, timeStr) >= MIN_MINUTES_BEFORE_BOOKING
+  );
+};
+
 module.exports = {
+  MIN_MINUTES_BEFORE_BOOKING,
+  BOOKING_WINDOW_DAYS,
+  addDays,
+  isWithinBookingWindow,
   DATE_REGEX,
   TIME_REGEX,
   UUID_REGEX,

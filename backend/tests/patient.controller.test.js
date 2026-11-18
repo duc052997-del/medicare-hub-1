@@ -58,8 +58,8 @@ describe('UC009 - profile + doi email/mat khau', () => {
   let userRow;
   let reads;
 
-  const setup = ({ users = [], patients = [] } = {}) => {
-    const queues = { users: [...users], patients: [...patients] };
+  const setup = ({ users = [], patients = [], admins = [] } = {}) => {
+    const queues = { users: [...users], patients: [...patients], admins: [...admins] };
     supabase.from.mockImplementation((table) => {
       if (!queues[table] || !queues[table].length) {
         throw new Error(`Thiếu mock ${table}`);
@@ -117,14 +117,15 @@ describe('UC009 - profile + doi email/mat khau', () => {
       expect(res.json.mock.calls[0][0].profile.phone).toBeNull();
     });
 
-    test('GET03 - Admin có hồ sơ gắn tài khoản được đọc hồ sơ chính mình', async () => {
-      setup({ users: [ok({ ...userRow, role: 'ADMIN' })], patients: [ok(patientRow)] });
+    test('GET03 - Admin đọc hồ sơ chính mình từ bảng admins', async () => {
+      setup({ users: [ok({ ...userRow, role: 'ADMIN' })], admins: [ok(patientRow)] });
       await getMyProfile(makeReq({}, 'ADMIN'), res);
       expected(200, { profile: { id: 'patient-1' } });
+      expect(reads).toEqual(['users', 'admins']);
     });
 
-    test('GET08 - Admin không có hồ sơ bệnh nhân -> 404, không tự tạo', async () => {
-      setup({ users: [ok({ ...userRow, role: 'ADMIN' })], patients: [ok(null)] });
+    test('GET08 - Admin thiếu dòng admins -> 404, không tự tạo', async () => {
+      setup({ users: [ok({ ...userRow, role: 'ADMIN' })], admins: [ok(null)] });
       await getMyProfile(makeReq({}, 'ADMIN'), res);
       expected(404);
     });
@@ -201,7 +202,7 @@ describe('UC009 - profile + doi email/mat khau', () => {
       expected(200, { patient: { id: 'patient-1', email: 'a@x.com' } });
       expect(reads).toEqual(['users', 'patients']);
       expect(supabase.rpc).toHaveBeenCalledTimes(1);
-      expect(supabase.rpc).toHaveBeenCalledWith('uc009_update_patient_profile',
+      expect(supabase.rpc).toHaveBeenCalledWith('uc009_update_profile',
         expect.objectContaining({
           p_user_id: USER_ID,
           p_expected_password_hash: userRow.password_hash,
@@ -286,7 +287,7 @@ describe('UC009 - profile + doi email/mat khau', () => {
     });
 
     test('PUT21 - Admin chỉ được cập nhật hồ sơ gắn với chính JWT của mình', async () => {
-      setup({ users: [ok({ ...userRow, role: 'ADMIN' })], patients: [ok(patientRow)] });
+      setup({ users: [ok({ ...userRow, role: 'ADMIN' })], admins: [ok(patientRow)] });
       supabase.rpc.mockResolvedValue({ data: { ...patientRow, email: 'a@x.com' }, error: null });
       await updateMyProfile(makeReq({}, 'ADMIN'), res);
       expected(200);
@@ -294,7 +295,7 @@ describe('UC009 - profile + doi email/mat khau', () => {
     });
 
     test('PUT22 - Admin không có hồ sơ -> 404, không được tạo', async () => {
-      setup({ users: [ok({ ...userRow, role: 'ADMIN' })], patients: [ok(null)] });
+      setup({ users: [ok({ ...userRow, role: 'ADMIN' })], admins: [ok(null)] });
       await updateMyProfile(makeReq({}, 'ADMIN'), res);
       expected(404);
       expect(supabase.rpc).not.toHaveBeenCalled();

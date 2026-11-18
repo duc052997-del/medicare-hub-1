@@ -155,11 +155,13 @@ export const mockLogin = async (email: string, password: string): Promise<LoginR
   const normalized = normalizeEmail(email);
   checkLoginRateLimit(normalized);
 
-  if (!EMAIL_REGEX.test(normalized)) throw new ApiError(401, 'Email không tồn tại', undefined, 'email');
+  if (!EMAIL_REGEX.test(normalized)) throw new ApiError(400, 'Email không đúng định dạng', undefined, 'email');
 
+  // SRS v8 UC002 5a: một thông báo chung, không lộ email nào đã đăng ký
   const found = allUsers().find((u) => u.email === normalized);
-  if (!found) throw new ApiError(401, 'Email không tồn tại', undefined, 'email');
-  if (found.password !== password) throw new ApiError(401, 'Mật khẩu không đúng', undefined, 'password');
+  if (!found || found.password !== password) {
+    throw new ApiError(401, 'Email hoặc mật khẩu không đúng', 'INVALID_CREDENTIALS');
+  }
   if (!found.is_active) throw new ApiError(403, 'Tài khoản đã bị khóa, vui lòng liên hệ quản trị viên');
 
   return { message: 'Đăng nhập thành công', token: makeToken(found), user: publicUser(found) };

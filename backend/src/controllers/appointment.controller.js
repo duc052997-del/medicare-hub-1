@@ -10,11 +10,14 @@ const {
   UUID_REGEX,
   TIME_REGEX,
   isValidCalendarDate,
-  getTodayInVietnam,
   getDayOfWeek,
   findSlotInSchedule,
-  getMinutesUntil
+  getMinutesUntil,
+  isWithinBookingWindow
 } = require('../utils/schedule');
+
+const OUT_OF_WINDOW_MESSAGE =
+  'Ngày khám phải từ ngày mai đến 30 ngày tới và cách hiện tại ít nhất 24 giờ';
 
 const VALID_STATUSES = new Set([
   'PENDING',
@@ -126,11 +129,12 @@ const createAppointment = async (req, res) => {
       return fail(res, 400, 'Ngày giờ không hợp lệ');
     }
 
-    // Bước 3 (SRS): không được đặt lịch trong quá khứ. Hợp đồng chỉ yêu cầu
-    // chặn theo NGÀY (không yêu cầu so cả giờ trong ngày hôm nay).
-    const todayVN = getTodayInVietnam();
-    if (date < todayVN) {
-      return fail(res, 400, 'Không thể đặt lịch trong quá khứ');
+    // Bước 3 (SRS v8 UC006): ngày từ ngày mai đến ngày mai + 30, giờ khám
+    // cách hiện tại ít nhất 24 giờ. BE kiểm tra lại, không tin FE.
+    if (!isWithinBookingWindow(date, time)) {
+      return fail(res, 400, OUT_OF_WINDOW_MESSAGE, {
+        field: 'date', code: 'OUT_OF_BOOKING_WINDOW'
+      });
     }
 
     // Bước 4: bác sĩ phải tồn tại và đang hoạt động
@@ -359,9 +363,9 @@ const rescheduleAppointment = async (req, res) => {
     if (!isValidCalendarDate(date) || !TIME_REGEX.test(time)) {
       return fail(res, 400, 'Ngày giờ không hợp lệ');
     }
-    const todayVN = getTodayInVietnam();
-    if (date < todayVN) {
-      return fail(res, 400, 'Ngày giờ không hợp lệ');
+    // SRS v8 UC011 bước 6/8: giờ mới tuân theo điều kiện của Đặt lịch.
+    if (!isWithinBookingWindow(date, time)) {
+      return fail(res, 400, 'Ngày giờ không hợp lệ', { code: 'OUT_OF_BOOKING_WINDOW' });
     }
 
     const patientId = await getPatientIdOrNull(req.user.id);
@@ -399,7 +403,8 @@ const rescheduleAppointment = async (req, res) => {
       return fail(res, 400, 'Ngày giờ không hợp lệ');
     }
 
-    // Cập nhật ngày/giờ, giữ nguyên trạng thái. Chống trùng giờ với lịch
+    // Cập nhật ngày/giờ và đưa lịch về PENDING (SRS v8: lịch đã đổi giờ phải
+    // được Admin xác nhận lại, kể cả khi đang CONFIRMED). Chống trùng giờ với lịch
     // hẹn khác bằng đúng unique index đang có (bắt 23505 -> 409 SLOT_TAKEN,
     // giống hệt lúc đặt lịch mới ở createAppointment).
     const { data: updated, error: updateError } = await supabase
@@ -408,6 +413,7 @@ const rescheduleAppointment = async (req, res) => {
         appointment_date: date,
         start_time: matchedSlot.time,
         end_time: matchedSlot.end_time,
+        status: 'PENDING',
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -423,7 +429,7 @@ const rescheduleAppointment = async (req, res) => {
       throw updateError;
     }
 
-    return success(res, 200, 'Đổi lịch hẹn thành công', {
+    return success(res, 200, 'Đổi lịch hẹn thành công, lịch đang chờ phòng khám xác nhận', {
       appointment: formatAppointment(updated),
     });
   } catch (error) {

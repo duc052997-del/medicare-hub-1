@@ -5,8 +5,9 @@
  *
  * PUT: email/password hien tai bat buoc; new_password tuy chon;
  * confirm_password chi can doi chieu neu FE gui len (hop dong: FE kiem tra).
- * Supabase RPC uc009_update_patient_profile cap nhat users + patients
- * trong 1 transaction PostgreSQL, tranh cap nhat du lieu do dang.
+ * Supabase RPC uc009_update_profile cap nhat users + ho so trong 1 transaction.
+ * SRS v8: ho so PATIENT o bang patients, ho so ADMIN o bang admins
+ * (migration 008_admin_profiles.sql).
  */
 
 const bcrypt = require('bcryptjs');
@@ -31,7 +32,7 @@ const PATIENT_SELECT =
   'id, full_name, avatar_url, phone, date_of_birth, gender, address';
 
 const INVALID_MESSAGE = 'Thông tin không hợp lệ';
-const PATIENT_NOT_FOUND_MESSAGE = 'Không tìm thấy hồ sơ bệnh nhân';
+const PROFILE_NOT_FOUND_MESSAGE = 'Không tìm thấy hồ sơ cá nhân';
 const SESSION_INVALID_MESSAGE =
   'Phiên đăng nhập không còn hiệu lực, vui lòng đăng nhập lại';
 const ACCESS_DENIED_MESSAGE = 'Bạn không có quyền truy cập chức năng này';
@@ -68,9 +69,12 @@ const findActiveProfileUser = async (userId, tokenRole) => {
   return { user };
 };
 
-const findPatient = async (userId) => {
+// Bang ho so theo vai tro: Admin dung bang admins, benh nhan dung patients.
+const profileTable = (role) => (role === 'ADMIN' ? 'admins' : 'patients');
+
+const findProfile = async (userId, role) => {
   const { data: patient, error } = await supabase
-    .from('patients')
+    .from(profileTable(role))
     .select(PATIENT_SELECT)
     .eq('user_id', userId)
     .maybeSingle();
@@ -85,8 +89,8 @@ const getMyProfile = async (req, res) => {
     if (auth.invalidSession) return fail(res, 401, SESSION_INVALID_MESSAGE);
     if (auth.forbidden) return fail(res, 403, ACCESS_DENIED_MESSAGE);
 
-    const patient = await findPatient(auth.user.id);
-    if (!patient) return fail(res, 404, PATIENT_NOT_FOUND_MESSAGE);
+    const patient = await findProfile(auth.user.id, auth.user.role);
+    if (!patient) return fail(res, 404, PROFILE_NOT_FOUND_MESSAGE);
 
     return success(res, 200, 'Lấy thông tin cá nhân thành công', {
       profile: formatProfile(auth.user, patient)
@@ -199,10 +203,10 @@ const updateMyProfile = async (req, res) => {
       });
     }
 
-    // Chi cap nhat ho so gan voi chinh user dang nhap. Admin khong co ban ghi
-    // patients se nhan 404, khong tu tao ho so benh nhan cho tai khoan Admin.
-    const patient = await findPatient(user.id);
-    if (!patient) return fail(res, 404, PATIENT_NOT_FOUND_MESSAGE);
+    // Chi cap nhat ho so gan voi chinh user dang nhap; thieu dong ho so -> 404,
+    // khong tu tao (dong admins do trigger cua migration 008 tao san).
+    const patient = await findProfile(user.id, user.role);
+    if (!patient) return fail(res, 404, PROFILE_NOT_FOUND_MESSAGE);
 
     // Chi bam mat khau moi khi nguoi dung yeu cau doi mat khau.
     const newPasswordHash = wantsNewPassword
@@ -213,7 +217,7 @@ const updateMyProfile = async (req, res) => {
     // email/password_hash cua users va cac field cua patients cung commit/rollback.
     // p_expected_password_hash giup tranh ghi de khi 2 request dong thoi doi mat khau.
     const { data: updated, error: updateError } = await supabase.rpc(
-      'uc009_update_patient_profile',
+      'uc009_update_profile',
       {
         p_user_id: user.id,
         p_expected_password_hash: user.password_hash,
@@ -235,8 +239,8 @@ const updateMyProfile = async (req, res) => {
           field: 'email', code: 'EMAIL_TAKEN'
         });
       }
-      if (updateError.message === 'UC009_PATIENT_NOT_FOUND') {
-        return fail(res, 404, PATIENT_NOT_FOUND_MESSAGE);
+      if (['UC009_PROFILE_NOT_FOUND', 'UC009_PATIENT_NOT_FOUND'].includes(updateError.message)) {
+        return fail(res, 404, PROFILE_NOT_FOUND_MESSAGE);
       }
       if (updateError.message === 'UC009_USER_NOT_FOUND') {
         return fail(res, 401, SESSION_INVALID_MESSAGE);
@@ -252,7 +256,7 @@ const updateMyProfile = async (req, res) => {
       throw updateError;
     }
     if (!updated || !updated.id) {
-      throw new Error('RPC uc009_update_patient_profile không trả về hồ sơ');
+      throw new Error('RPC uc009_update_profile không trả về hồ sơ');
     }
 
     return success(res, 200, 'Cập nhật thông tin cá nhân thành công', {

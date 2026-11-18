@@ -17,7 +17,7 @@ export default function AdminDoctorsPage({ user, nav }: Props) {
       <Header user={user} nav={nav} active="doctors" />
       <PageBanner
         title="Đội Ngũ Bác Sĩ"
-        sub="Quản lý bác sĩ: thêm, sửa, ngừng hoạt động hoặc xóa (Admin)"
+        sub="Quản lý bác sĩ: thêm, sửa, ngừng hoạt động hoặc kích hoạt lại (Admin)"
       />
       <AdminDoctorList isAdmin={user?.role === 'ADMIN'} />
       <Footer />

@@ -41,17 +41,9 @@ export const adminDoctorService = {
     return { message: res.data?.message || 'Cập nhật bác sĩ thành công', doctor: res.data.doctor };
   },
 
-  /**
-   * Lần 1 (đang active): soft delete is_active=false (API-19).
-   * Lần 2 (đã ngừng): xóa triệt để khỏi kho mock / BE nếu hỗ trợ.
-   */
-  async remove(id: string, opts?: { hard?: boolean }): Promise<{ message: string }> {
-    if (env.USE_MOCK) return (await loadMock()).mockRemove(id, opts);
-    if (opts?.hard) {
-      // BE hợp đồng hiện chỉ soft-delete; gửi query để backend mở rộng sau
-      const res = await api.delete(`/admin/doctors/${id}`, { params: { hard: 'true' } });
-      return { message: res.data?.message || 'Đã xóa triệt để bác sĩ' };
-    }
+  /** API-19: ngừng hoạt động bác sĩ (soft delete). SRS v8: không có xóa vĩnh viễn. */
+  async remove(id: string): Promise<{ message: string }> {
+    if (env.USE_MOCK) return (await loadMock()).mockRemove(id);
     const res = await api.delete(`/admin/doctors/${id}`);
     return { message: res.data?.message || 'Xóa bác sĩ thành công' };
   },

@@ -1,5 +1,5 @@
 // components/admindoctorlist.tsx — UC010: danh sách bác sĩ Admin trên trang Bác sĩ.
-// Thẻ giống phía user + email/SĐT; 3 nút cùng 1 hàng: Sửa | Ngừng hoạt động | Xóa.
+// Thẻ giống phía user + email/SĐT; 2 nút cùng 1 hàng: Sửa | Ngừng hoạt động (hoặc Kích hoạt lại).
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import SafeImage from './safeimage';
@@ -20,7 +20,8 @@ const Group = ({ label, children }: { label: string; children: ReactNode }) => (
   </div>
 );
 
-type ConfirmKind = 'deactivate' | 'delete' | 'hardDelete' | 'reactivate';
+// SRS v8 UC010: chỉ có Ngừng hoạt động (soft delete) và Kích hoạt lại; không có nút Xóa
+type ConfirmKind = 'deactivate' | 'reactivate';
 
 interface Props {
   isAdmin: boolean;
@@ -95,23 +96,15 @@ export default function AdminDoctorList({ isAdmin }: Props) {
       if (confirm.kind === 'reactivate') {
         const res = await adminDoctorService.reactivate(confirm.id);
         text = res.message || 'Đã kích hoạt lại bác sĩ';
-      } else if (confirm.kind === 'hardDelete') {
-        const res = await adminDoctorService.remove(confirm.id, { hard: true });
-        text = res.message || 'Đã xóa triệt để bác sĩ';
       } else {
         const res = await adminDoctorService.remove(confirm.id);
-        text =
-          confirm.kind === 'deactivate'
-            ? res.message || 'Đã ngừng hoạt động bác sĩ'
-            : res.message || 'Đã ngừng hoạt động bác sĩ (xóa lần 1)';
+        text = res.message || 'Đã ngừng hoạt động bác sĩ';
       }
       // Thành công: cập nhật list tại chỗ (giữ thứ tự), ẩn khi ngừng nếu không tick "hiện đã ngừng"
       setConfirm(null);
       setConfirmError('');
       setNotice({ kind: 'ok', text });
-      if (confirm.kind === 'hardDelete') {
-        setList((prev) => prev.filter((d) => d.id !== confirm.id));
-      } else if (confirm.kind === 'reactivate') {
+      if (confirm.kind === 'reactivate') {
         setList((prev) => prev.map((d) => (d.id === confirm.id ? { ...d, is_active: true } : d)));
       } else {
         // ngừng / xóa lần 1: soft — chỉ ẩn nếu không includeInactive
@@ -170,7 +163,7 @@ export default function AdminDoctorList({ isAdmin }: Props) {
         </div>
       </div>
 
-      {/* Cùng 1 hàng: Sửa | Ngừng/Kích hoạt | Xóa — không có Đặt lịch */}
+      {/* Cùng 1 hàng: Sửa | Ngừng/Kích hoạt — không có Xóa, không có Đặt lịch */}
       <div style={s.cardActions}>
         <button type="button" className="mh-btn" style={s.btnGhost} onClick={() => setFormId(d.id)}>
           Sửa
@@ -194,20 +187,6 @@ export default function AdminDoctorList({ isAdmin }: Props) {
             Kích hoạt lại
           </button>
         )}
-        <button
-          type="button"
-          className="mh-btn"
-          style={s.btnDanger}
-          onClick={() =>
-            openConfirm({
-              id: d.id,
-              kind: d.is_active ? 'delete' : 'hardDelete',
-              name: d.full_name,
-            })
-          }
-        >
-          Xóa
-        </button>
       </div>
     </div>
   );
@@ -324,13 +303,7 @@ export default function AdminDoctorList({ isAdmin }: Props) {
         >
           <div style={s.confirmModal} onClick={(e) => e.stopPropagation()}>
             <h2 style={s.confirmTitle}>
-              {confirm.kind === 'reactivate'
-                ? 'Kích hoạt lại'
-                : confirm.kind === 'hardDelete'
-                  ? 'Xóa triệt để'
-                  : confirm.kind === 'deactivate'
-                    ? 'Ngừng hoạt động'
-                    : 'Xóa bác sĩ'}
+              {confirm.kind === 'reactivate' ? 'Kích hoạt lại' : 'Ngừng hoạt động'}
             </h2>
             <p style={s.confirmBody}>
               {confirm.kind === 'reactivate' && (
@@ -341,16 +314,6 @@ export default function AdminDoctorList({ isAdmin }: Props) {
               {confirm.kind === 'deactivate' && (
                 <>
                   Ngừng hoạt động <b>{confirm.name}</b>? Có thể kích hoạt lại sau.
-                </>
-              )}
-              {confirm.kind === 'delete' && (
-                <>
-                  Xóa lần 1 <b>{confirm.name}</b> = ngừng hoạt động. Xóa lần 2 (khi đã ngừng) sẽ xóa triệt để.
-                </>
-              )}
-              {confirm.kind === 'hardDelete' && (
-                <>
-                  Xóa triệt để <b>{confirm.name}</b>? Không thể hoàn tác.
                 </>
               )}
             </p>
@@ -371,13 +334,7 @@ export default function AdminDoctorList({ isAdmin }: Props) {
               <button
                 type="button"
                 className="mh-btn"
-                style={
-                  confirm.kind === 'reactivate'
-                    ? s.confirmBtnPrimary
-                    : confirm.kind === 'deactivate'
-                      ? s.confirmBtnWarn
-                      : s.confirmBtnDanger
-                }
+                style={confirm.kind === 'reactivate' ? s.confirmBtnPrimary : s.confirmBtnWarn}
                 disabled={busy}
                 onClick={runConfirm}
               >
@@ -385,11 +342,7 @@ export default function AdminDoctorList({ isAdmin }: Props) {
                   ? 'Đang xử lý...'
                   : confirm.kind === 'reactivate'
                     ? 'Kích hoạt lại'
-                    : confirm.kind === 'hardDelete'
-                      ? 'Xóa triệt để'
-                      : confirm.kind === 'deactivate'
-                        ? 'Ngừng hoạt động'
-                        : 'Xóa'}
+                    : 'Ngừng hoạt động'}
               </button>
             </div>
           </div>

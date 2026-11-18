@@ -40,7 +40,7 @@ export default function Logout({ isOpen, onClose, onConfirm }: LogoutProps) {
           </button>
         </div>
 
-        <p style={styles.footerText}>Bạn sẽ được chuyển về trang đăng nhập sau khi xác nhận</p>
+        <p style={styles.footerText}>Bạn sẽ được chuyển về trang chủ sau khi xác nhận</p>
       </div>
     </div>
   );
