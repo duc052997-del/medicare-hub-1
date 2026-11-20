@@ -7,14 +7,10 @@ import ScheduleTable from '../components/scheduletable';
 import { doctorService } from '../services/doctorservice';
 import { useClinicInfo } from '../services/clinicservice';
 import { ApiError } from '../services/apierror';
-import { env } from '../config/env';
 import { getAsset, getRoleLabel } from '../utils/helpers';
 import { DOCTOR_SPECIALTIES } from '../config/constants';
 import { inner, layoutStyles } from '../styles/layout';
 import type { AuthUser, Doctor, NavHandlers } from '../types';
-
-/** Định dạng số kiểu Việt Nam (1.234) */
-const formatVisits = (n: number) => n.toLocaleString('vi-VN');
 
 const REASONS = [
   { icon: '👨‍⚕️', t: 'Đội ngũ bác sĩ giàu kinh nghiệm', d: 'Bác sĩ có chuyên môn cao, tận tâm và nhiều năm công tác tại các bệnh viện lớn.' },
@@ -59,8 +55,6 @@ export default function Home({ user, nav, onBooking }: HomeProps) {
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]); // toàn bộ — dùng cho stats
   const [doctorsLoading, setDoctorsLoading] = useState(true);
   const [doctorsError, setDoctorsError] = useState('');
-  // Số lịch khám hoàn tất (COMPLETED) — dùng cho "Lượt khám "
-  const [completedVisits, setCompletedVisits] = useState<number | null>(null);
 
   // API-06 featured (carousel) + API-07 toàn bộ bác sĩ (thống kê)
   useEffect(() => {
@@ -81,66 +75,19 @@ export default function Home({ user, nav, onBooking }: HomeProps) {
     };
   }, []);
 
-  // Lấy số lượt khám = số lịch hẹn status COMPLETED (ưu tiên trong năm hiện tại)
-  useEffect(() => {
-    let cancelled = false;
-    const year = new Date().getFullYear();
-    const yearPrefix = String(year);
-
-    const applyCount = (list: { status?: string; appointment_date?: string }[]) => {
-      if (cancelled) return;
-      const completed = list.filter((a) => a.status === 'COMPLETED');
-      const thisYear = completed.filter((a) => (a.appointment_date || '').startsWith(yearPrefix));
-      // Có dữ liệu trong năm thì lấy theo năm; không thì lấy tổng lịch hoàn tất
-      setCompletedVisits((thisYear.length > 0 ? thisYear : completed).length);
-    };
-
-    if (env.USE_MOCK) {
-      // Mock: đếm trực tiếp từ store lịch hẹn
-      import('../services/mocks/mockstore')
-        .then(({ loadAppointments }) => applyCount(loadAppointments()))
-        .catch(() => !cancelled && setCompletedVisits(0));
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    // nếu đang đăng nhập Admin thì lấy danh sách lịch COMPLETED
-    if (user?.role === 'ADMIN') {
-      import('../services/adminappointmentservice')
-        .then(({ adminAppointmentService }) =>
-          adminAppointmentService.getAll({ status: 'COMPLETED' }).then(applyCount)
-        )
-        .catch(() => !cancelled && setCompletedVisits(null));
-    } else {
-      setCompletedVisits(null); // không có nguồn public → giữ fallback
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.role]);
-
-  // Bác sĩ / chuyên khoa / lượt khám lấy từ data; chỉ "24/7" giữ cố định
+  // Số lượng bác sĩ chuyên khoa & chuyên khoa lấy từ data; tổng số lịch khám và 24/7 giữ tĩnh
   const stats = useMemo(() => {
     const doctorCount = allDoctors.length;
     const specialtyFromDoctors = new Set(allDoctors.map((d) => d.specialty).filter(Boolean)).size;
     const specialtyCount = specialtyFromDoctors || DOCTOR_SPECIALTIES.length;
 
-    const visitsLabel =
-      completedVisits == null
-        ? '—'
-        : completedVisits === 0
-          ? '0'
-          : formatVisits(completedVisits);
-
     return [
       { value: doctorCount > 0 ? `${doctorCount}+` : '—', label: 'Bác sĩ chuyên khoa' },
-      { value: visitsLabel, label: 'Tổng số lịch khám' },
+      { value: '1000+', label: 'Tổng số lịch khám' },
       { value: specialtyCount > 0 ? String(specialtyCount) : '—', label: 'Chuyên khoa' },
       { value: '24/7', label: 'Đặt lịch trực tuyến' },
     ];
-  }, [allDoctors, completedVisits]);
+  }, [allDoctors]);
 
   const displayName = user ? user.username || user.email : '';
   const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -301,18 +248,17 @@ const styles: Record<string, CSSProperties> = {
   carousel: { ...inner, position: 'relative' },
   track: { display: 'flex', gap: 20, overflowX: 'auto', scrollSnapType: 'x mandatory', padding: '6px 2px 14px', scrollBehavior: 'smooth', alignItems: 'stretch', scrollbarWidth: 'none' },
   arrow: { position: 'absolute', top: '42%', zIndex: 5, width: 40, height: 40, borderRadius: '50%', border: '1px solid #bfdbfe', backgroundColor: '#fff', color: '#2563eb', fontSize: 24, lineHeight: '36px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(15,23,42,.12)', transition: 'all .2s' },
-  
-  // Cấu hình căn giữa các thành phần bên trong thẻ bác sĩ
+
   doctorCard: { scrollSnapAlign: 'start', flex: '0 0 calc(33.333% - 14px)', width: 'calc(33.333% - 14px)', minWidth: 260, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 24, backgroundColor: '#fff', border: '1px solid #dbeafe', borderRadius: 16, textAlign: 'center', boxSizing: 'border-box' },
-  
+
   doctorImg: { width: 120, height: 120, borderRadius: '50%', objectFit: 'cover', border: '4px solid #dbeafe', margin: '0 auto 14px', display: 'block', flexShrink: 0 },
   doctorAvatar: { width: 120, height: 120, borderRadius: '50%', backgroundColor: '#e0efff', border: '4px solid #dbeafe', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: 52, margin: '0 auto 14px', flexShrink: 0 },
   doctorName: { fontSize: 17, fontWeight: 700, color: '#0f172a', margin: '0 0 4px', minHeight: 24, textAlign: 'center', width: '100%' },
   doctorSpec: { fontSize: 14, color: '#2563eb', fontWeight: 600, margin: '0 0 10px', minHeight: 20, textAlign: 'center', width: '100%' },
-  
+
   doctorBioWrapper: { flexGrow: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', marginBottom: 16, width: '100%' },
   doctorBio: { fontSize: 13, color: '#64748b', margin: 0, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center', width: '100%' },
-  
+
   doctorNote: { ...inner, fontSize: 15, color: '#64748b', padding: '24px 0' },
 
   ctaWrap: { padding: '72px 48px' },
