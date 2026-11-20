@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import SafeImage from '../components/safeimage';
 import Header from '../components/header';
@@ -8,15 +8,9 @@ import { doctorService } from '../services/doctorservice';
 import { useClinicInfo } from '../services/clinicservice';
 import { ApiError } from '../services/apierror';
 import { getAsset, getRoleLabel } from '../utils/helpers';
+import { DOCTOR_SPECIALTIES } from '../config/constants';
 import { inner, layoutStyles } from '../styles/layout';
 import type { AuthUser, Doctor, NavHandlers } from '../types';
-
-const STATS = [
-  { value: '6+', label: 'Bác sĩ chuyên khoa' },
-  { value: '10.000+', label: 'Lượt khám mỗi năm' },
-  { value: '8', label: 'Chuyên khoa' },
-  { value: '24/7', label: 'Đặt lịch trực tuyến' },
-];
 
 const REASONS = [
   { icon: '👨‍⚕️', t: 'Đội ngũ bác sĩ giàu kinh nghiệm', d: 'Bác sĩ có chuyên môn cao, tận tâm và nhiều năm công tác tại các bệnh viện lớn.' },
@@ -57,16 +51,20 @@ interface HomeProps {
 export default function Home({ user, nav, onBooking }: HomeProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const { clinic, loading: clinicLoading } = useClinicInfo(); // mô tả phòng khám từ API-05
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]); // featured (carousel)
+  const [allDoctors, setAllDoctors] = useState<Doctor[]>([]); // toàn bộ — dùng cho stats
   const [doctorsLoading, setDoctorsLoading] = useState(true);
   const [doctorsError, setDoctorsError] = useState('');
 
-  // API-06: service tự chọn mock hoặc BE thật
+  // API-06 featured (carousel) + API-07 toàn bộ bác sĩ (thống kê)
   useEffect(() => {
     let cancelled = false;
-    doctorService
-      .getFeatured()
-      .then((list) => !cancelled && setDoctors(list))
+    Promise.all([doctorService.getFeatured(), doctorService.getDoctors()])
+      .then(([featured, all]) => {
+        if (cancelled) return;
+        setDoctors(featured);
+        setAllDoctors(all);
+      })
       .catch((err) => {
         if (!cancelled)
           setDoctorsError(err instanceof ApiError && err.message ? err.message : 'Không thể tải danh sách bác sĩ, vui lòng thử lại sau.');
@@ -76,6 +74,20 @@ export default function Home({ user, nav, onBooking }: HomeProps) {
       cancelled = true;
     };
   }, []);
+
+  // Số lượng bác sĩ chuyên khoa & chuyên khoa lấy từ data; tổng số lịch khám và 24/7 giữ tĩnh
+  const stats = useMemo(() => {
+    const doctorCount = allDoctors.length;
+    const specialtyFromDoctors = new Set(allDoctors.map((d) => d.specialty).filter(Boolean)).size;
+    const specialtyCount = specialtyFromDoctors || DOCTOR_SPECIALTIES.length;
+
+    return [
+      { value: doctorCount > 0 ? `${doctorCount}+` : '—', label: 'Bác sĩ chuyên khoa' },
+      { value: '1000+', label: 'Tổng số lịch khám' },
+      { value: specialtyCount > 0 ? String(specialtyCount) : '—', label: 'Chuyên khoa' },
+      { value: '24/7', label: 'Đặt lịch trực tuyến' },
+    ];
+  }, [allDoctors]);
 
   const displayName = user ? user.username || user.email : '';
   const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -112,7 +124,7 @@ export default function Home({ user, nav, onBooking }: HomeProps) {
 
       <section style={styles.statsWrap}>
         <div className="mh-grid4" style={styles.statsGrid}>
-          {STATS.map((s) => (
+          {stats.map((s) => (
             <div key={s.label} style={styles.statItem}>
               <div style={styles.statValue}>{s.value}</div>
               <div style={styles.statLabel}>{s.label}</div>
@@ -236,18 +248,17 @@ const styles: Record<string, CSSProperties> = {
   carousel: { ...inner, position: 'relative' },
   track: { display: 'flex', gap: 20, overflowX: 'auto', scrollSnapType: 'x mandatory', padding: '6px 2px 14px', scrollBehavior: 'smooth', alignItems: 'stretch', scrollbarWidth: 'none' },
   arrow: { position: 'absolute', top: '42%', zIndex: 5, width: 40, height: 40, borderRadius: '50%', border: '1px solid #bfdbfe', backgroundColor: '#fff', color: '#2563eb', fontSize: 24, lineHeight: '36px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(15,23,42,.12)', transition: 'all .2s' },
-  
-  // Cấu hình căn giữa các thành phần bên trong thẻ bác sĩ
+
   doctorCard: { scrollSnapAlign: 'start', flex: '0 0 calc(33.333% - 14px)', width: 'calc(33.333% - 14px)', minWidth: 260, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 24, backgroundColor: '#fff', border: '1px solid #dbeafe', borderRadius: 16, textAlign: 'center', boxSizing: 'border-box' },
-  
+
   doctorImg: { width: 120, height: 120, borderRadius: '50%', objectFit: 'cover', border: '4px solid #dbeafe', margin: '0 auto 14px', display: 'block', flexShrink: 0 },
   doctorAvatar: { width: 120, height: 120, borderRadius: '50%', backgroundColor: '#e0efff', border: '4px solid #dbeafe', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: 52, margin: '0 auto 14px', flexShrink: 0 },
   doctorName: { fontSize: 17, fontWeight: 700, color: '#0f172a', margin: '0 0 4px', minHeight: 24, textAlign: 'center', width: '100%' },
   doctorSpec: { fontSize: 14, color: '#2563eb', fontWeight: 600, margin: '0 0 10px', minHeight: 20, textAlign: 'center', width: '100%' },
-  
+
   doctorBioWrapper: { flexGrow: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', marginBottom: 16, width: '100%' },
   doctorBio: { fontSize: 13, color: '#64748b', margin: 0, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center', width: '100%' },
-  
+
   doctorNote: { ...inner, fontSize: 15, color: '#64748b', padding: '24px 0' },
 
   ctaWrap: { padding: '72px 48px' },
