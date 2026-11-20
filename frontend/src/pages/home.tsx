@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import SafeImage from '../components/safeimage';
 import Header from '../components/header';
@@ -7,16 +7,14 @@ import ScheduleTable from '../components/scheduletable';
 import { doctorService } from '../services/doctorservice';
 import { useClinicInfo } from '../services/clinicservice';
 import { ApiError } from '../services/apierror';
+import { env } from '../config/env';
 import { getAsset, getRoleLabel } from '../utils/helpers';
+import { DOCTOR_SPECIALTIES } from '../config/constants';
 import { inner, layoutStyles } from '../styles/layout';
 import type { AuthUser, Doctor, NavHandlers } from '../types';
 
-const STATS = [
-  { value: '6+', label: 'Bác sĩ chuyên khoa' },
-  { value: '10.000+', label: 'Lượt khám mỗi năm' },
-  { value: '8', label: 'Chuyên khoa' },
-  { value: '24/7', label: 'Đặt lịch trực tuyến' },
-];
+/** Định dạng số kiểu Việt Nam (1.234) */
+const formatVisits = (n: number) => n.toLocaleString('vi-VN');
 
 const REASONS = [
   { icon: '👨‍⚕️', t: 'Đội ngũ bác sĩ giàu kinh nghiệm', d: 'Bác sĩ có chuyên môn cao, tận tâm và nhiều năm công tác tại các bệnh viện lớn.' },
@@ -57,16 +55,22 @@ interface HomeProps {
 export default function Home({ user, nav, onBooking }: HomeProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const { clinic, loading: clinicLoading } = useClinicInfo(); // mô tả phòng khám từ API-05
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]); // featured (carousel)
+  const [allDoctors, setAllDoctors] = useState<Doctor[]>([]); // toàn bộ — dùng cho stats
   const [doctorsLoading, setDoctorsLoading] = useState(true);
   const [doctorsError, setDoctorsError] = useState('');
+  // Số lịch khám hoàn tất (COMPLETED) — dùng cho "Lượt khám "
+  const [completedVisits, setCompletedVisits] = useState<number | null>(null);
 
-  // API-06: service tự chọn mock hoặc BE thật
+  // API-06 featured (carousel) + API-07 toàn bộ bác sĩ (thống kê)
   useEffect(() => {
     let cancelled = false;
-    doctorService
-      .getFeatured()
-      .then((list) => !cancelled && setDoctors(list))
+    Promise.all([doctorService.getFeatured(), doctorService.getDoctors()])
+      .then(([featured, all]) => {
+        if (cancelled) return;
+        setDoctors(featured);
+        setAllDoctors(all);
+      })
       .catch((err) => {
         if (!cancelled)
           setDoctorsError(err instanceof ApiError && err.message ? err.message : 'Không thể tải danh sách bác sĩ, vui lòng thử lại sau.');
@@ -76,6 +80,67 @@ export default function Home({ user, nav, onBooking }: HomeProps) {
       cancelled = true;
     };
   }, []);
+
+  // Lấy số lượt khám = số lịch hẹn status COMPLETED (ưu tiên trong năm hiện tại)
+  useEffect(() => {
+    let cancelled = false;
+    const year = new Date().getFullYear();
+    const yearPrefix = String(year);
+
+    const applyCount = (list: { status?: string; appointment_date?: string }[]) => {
+      if (cancelled) return;
+      const completed = list.filter((a) => a.status === 'COMPLETED');
+      const thisYear = completed.filter((a) => (a.appointment_date || '').startsWith(yearPrefix));
+      // Có dữ liệu trong năm thì lấy theo năm; không thì lấy tổng lịch hoàn tất
+      setCompletedVisits((thisYear.length > 0 ? thisYear : completed).length);
+    };
+
+    if (env.USE_MOCK) {
+      // Mock: đếm trực tiếp từ store lịch hẹn
+      import('../services/mocks/mockstore')
+        .then(({ loadAppointments }) => applyCount(loadAppointments()))
+        .catch(() => !cancelled && setCompletedVisits(0));
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // nếu đang đăng nhập Admin thì lấy danh sách lịch COMPLETED
+    if (user?.role === 'ADMIN') {
+      import('../services/adminappointmentservice')
+        .then(({ adminAppointmentService }) =>
+          adminAppointmentService.getAll({ status: 'COMPLETED' }).then(applyCount)
+        )
+        .catch(() => !cancelled && setCompletedVisits(null));
+    } else {
+      setCompletedVisits(null); // không có nguồn public → giữ fallback
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.role]);
+
+  // Bác sĩ / chuyên khoa / lượt khám lấy từ data; chỉ "24/7" giữ cố định
+  const stats = useMemo(() => {
+    const doctorCount = allDoctors.length;
+    const specialtyFromDoctors = new Set(allDoctors.map((d) => d.specialty).filter(Boolean)).size;
+    const specialtyCount = specialtyFromDoctors || DOCTOR_SPECIALTIES.length;
+
+    const visitsLabel =
+      completedVisits == null
+        ? '—'
+        : completedVisits === 0
+          ? '0'
+          : formatVisits(completedVisits);
+
+    return [
+      { value: doctorCount > 0 ? `${doctorCount}+` : '—', label: 'Bác sĩ chuyên khoa' },
+      { value: visitsLabel, label: 'Tổng số lịch khám' },
+      { value: specialtyCount > 0 ? String(specialtyCount) : '—', label: 'Chuyên khoa' },
+      { value: '24/7', label: 'Đặt lịch trực tuyến' },
+    ];
+  }, [allDoctors, completedVisits]);
 
   const displayName = user ? user.username || user.email : '';
   const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -112,7 +177,7 @@ export default function Home({ user, nav, onBooking }: HomeProps) {
 
       <section style={styles.statsWrap}>
         <div className="mh-grid4" style={styles.statsGrid}>
-          {STATS.map((s) => (
+          {stats.map((s) => (
             <div key={s.label} style={styles.statItem}>
               <div style={styles.statValue}>{s.value}</div>
               <div style={styles.statLabel}>{s.label}</div>
