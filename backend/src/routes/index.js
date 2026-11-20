@@ -5,11 +5,25 @@ const express = require('express');
 const router = express.Router();
 
 const authRoutes = require('./auth.routes');
-// const patientRoutes = require('./patient.routes');
-// const appointmentRoutes = require('./appointment.routes');
+const homeRoutes = require('./home.routes');
+const doctorRoutes = require('./doctor.routes');
+const doctorCatalogRoutes = require('./doctorCatalog.routes'); // [UC005-BE]
+const appointmentRoutes = require('./appointment.routes'); // [UC006-BE] [UC007-BE] [UC011-BE]
+const medicalRecordRoutes = require('./medicalRecord.routes'); // [UC008-BE]
+
+const patientRoutes = require('./patient.routes'); // [UC009-BE]
 
 router.use('/auth', authRoutes);
-// router.use('/patients', patientRoutes);
-// router.use('/appointments', appointmentRoutes);
+router.use('/home', homeRoutes);
+router.use('/doctors', doctorRoutes);
+router.use('/doctors', doctorCatalogRoutes); // [UC005-BE] cung prefix /doctors, khac file
+router.use('/appointments', appointmentRoutes); // [UC006-BE] [UC007-BE] [UC011-BE]
+router.use('/medical-records', medicalRecordRoutes); // [UC008-BE]
 
+// API-13 GET /api/auth/profile; API-14 PUT /api/auth/profile.
+router.use('/auth', patientRoutes);
+
+router.use('/admin', require('./uc012.routes'));
+router.use('/admin', require('./uc010.routes'));
+router.use('/admin', require('./adminAppointment.routes')); // [UC011-BE]
 module.exports = router;

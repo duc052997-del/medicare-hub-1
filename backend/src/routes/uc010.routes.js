@@ -1,0 +1,11 @@
+const router = require('express').Router();
+const {verifyToken, requireRole} = require('../middlewares/auth.middleware');
+const c = require('../controllers/uc010.controller');
+router.use(verifyToken, requireRole('ADMIN'));
+router.get('/doctors', c.list);
+router.get('/doctors/:id', c.detail);
+router.post('/doctors', c.save);
+router.put('/doctors/:id', c.save);
+router.delete('/doctors/:id', c.remove);
+router.post('/doctors/:id/reactivate', c.reactivate);
+module.exports = router;

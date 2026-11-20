@@ -1,0 +1,127 @@
+// utils/schedule.ts
+// Xử lý khung giờ: đổi giờ <-> phút, gom khung giờ thành ca làm việc.
+// Dùng cho trang Bác sĩ, khung đặt lịch (UC006), lịch sử đặt lịch (UC007) và mock.
+
+import type { Slot } from '../types';
+
+export const toMinutes = (t: string) => {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+
+/** Nhãn thứ: index 0=CN … 6=T7 (khớp day_of_week backend / UC010) */
+export const WEEKDAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'] as const;
+
+/** Thứ tự hiển thị / sắp xếp: T2 → … → T7 → CN */
+export const WEEKDAY_ORDER_MON_FIRST = [1, 2, 3, 4, 5, 6, 0] as const;
+
+/** Key sắp xếp: T2=1 … T7=6, CN=7 */
+export const weekdaySortKey = (dayOfWeek: number) => (dayOfWeek === 0 ? 7 : dayOfWeek);
+
+export const toTime = (total: number) =>
+  `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+
+export interface Shift {
+  label: string;
+  start: string;
+  end: string;
+  availableCount: number; // số khung giờ còn trống
+}
+
+// Backend chỉ trả danh sách khung giờ, không trả tên ca nên FE chia theo buổi.
+const SHIFT_DEFS = [
+  { label: 'Ca sáng', from: 0, to: 12 * 60 },
+  { label: 'Ca chiều', from: 12 * 60, to: 18 * 60 },
+  { label: 'Ca tối', from: 18 * 60, to: 24 * 60 },
+];
+
+const DEFAULT_STEP = 30; // phút, trùng mặc định của backend
+
+// Độ dài 1 khung = khoảng cách nhỏ nhất giữa 2 khung liền kề
+const detectStep = (minutes: number[]) => {
+  const diffs = minutes.slice(1).map((v, i) => v - minutes[i]).filter((d) => d > 0);
+  return diffs.length ? Math.min(...diffs) : DEFAULT_STEP;
+};
+
+export const buildShifts = (slots: Slot[]): Shift[] => {
+  if (!slots.length) return [];
+  const sorted = [...slots].sort((a, b) => toMinutes(a.time) - toMinutes(b.time));
+  const globalStep = detectStep(sorted.map((s) => toMinutes(s.time)));
+
+  return SHIFT_DEFS.flatMap(({ label, from, to }) => {
+    const inShift = sorted.filter((s) => {
+      const m = toMinutes(s.time);
+      return m >= from && m < to;
+    });
+    if (!inShift.length) return [];
+
+    const mins = inShift.map((s) => toMinutes(s.time));
+    const step = mins.length > 1 ? detectStep(mins) : globalStep;
+    return [
+      {
+        label,
+        start: toTime(mins[0]),
+        end: toTime(mins[mins.length - 1] + step), // khung cuối + độ dài 1 khung
+        availableCount: inShift.filter((s) => s.available).length,
+      },
+    ];
+  });
+};
+
+// ---------- Ngày/giờ theo giờ Việt Nam (UTC+7), dùng cho đặt lịch ----------
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+const vietnamNow = () => new Date(Date.now() + VN_OFFSET_MS).toISOString();
+export const todayVN = () => vietnamNow().slice(0, 10); // YYYY-MM-DD
+export const timeNowVN = () => vietnamNow().slice(11, 16); // HH:mm
+
+// Đúng định dạng VÀ là ngày có thật: '2026-13-45', '2026-02-30' -> false (Lệch #7 trong hợp đồng)
+export const isRealDate = (day: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const d = new Date(`${day}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === day;
+};
+
+// ---------- Quy tắc đặt lịch UC006 ----------
+// Chọn được từ NGÀY MAI đến NGÀY MAI + 30 (31 ngày), và phải đặt trước giờ khám ít nhất 24 giờ.
+export const BOOKING_MIN_HOURS = 24;
+export const BOOKING_MAX_DAYS = 30;
+
+// "2026-10-16" + 1 -> "2026-10-17"
+export const addDays = (day: string, n: number) => {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+export const minBookingDate = () => addDays(todayVN(), 1);
+export const maxBookingDate = () => addDays(minBookingDate(), BOOKING_MAX_DAYS);
+
+// Giờ treo tường VN của một khung giờ, tính bằng ms (cùng hệ quy chiếu với vietnamNow)
+const wallMs = (day: string, time: string) => {
+  const [y, m, d] = day.split('-').map(Number);
+  const [h, mi] = time.split(':').map(Number);
+  return Date.UTC(y, m - 1, d, h, mi);
+};
+
+// Khung giờ còn đặt được = giờ bắt đầu cách hiện tại ít nhất 24 giờ (tính chặt theo giờ).
+// Ví dụ bây giờ 22:12 thì ngày mai chỉ đặt được các khung từ 22:30 trở đi.
+export const isSlotBookable = (day: string, time: string) =>
+  wallMs(day, time) - (Date.now() + VN_OFFSET_MS) >= BOOKING_MIN_HOURS * 60 * 60 * 1000;
+
+// Độ dài 1 khung (phút) của một danh sách slot trả từ API-08
+export const slotMinutes = (slots: Slot[]) =>
+  detectStep(slots.map((s) => toMinutes(s.time)).sort((a, b) => a - b));
+
+// Khung [time, time + step) có chồng lên lịch hẹn [start_time, end_time) không
+export const slotOverlaps = (time: string, step: number, appt: { start_time: string; end_time: string }) => {
+  const s = toMinutes(time);
+  return s < toMinutes(appt.end_time) && toMinutes(appt.start_time) < s + step;
+};
+
+// "2026-10-06T02:00:00Z" -> "09:00 06/10/2026" (giờ VN)
+export const formatDateTimeVN = (iso: string) => {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '';
+  const s = new Date(t + VN_OFFSET_MS).toISOString();
+  return `${s.slice(11, 16)} ${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`;
+};
